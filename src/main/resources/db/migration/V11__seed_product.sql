@@ -1,0 +1,7 @@
+-- Seed product (idempotent)
+INSERT INTO product (id, business_id, category_id, name, sku, barcode, cost_price, sale_price, unit, is_active, created_at, updated_at)
+VALUES
+    ('e0000001-0000-4000-8000-000000000001', 'a0000001-0000-4000-8000-000000000001', 'd0000001-0000-4000-8000-000000000001', 'Coca-Cola 33cl', 'SKU-001', '5449000000996', 150, 250, 'pièce', true, NOW(), NOW()),
+    ('e0000002-0000-4000-8000-000000000002', 'a0000001-0000-4000-8000-000000000001', 'd0000001-0000-4000-8000-000000000001', 'Fanta Orange 33cl', 'SKU-002', '5449000001009', 140, 250, 'pièce', true, NOW(), NOW()),
+    ('e0000003-0000-4000-8000-000000000003', 'a0000001-0000-4000-8000-000000000001', 'd0000002-0000-4000-8000-000000000002', 'Chips Lay''s 50g', 'SKU-003', '5449000001016', 200, 350, 'pièce', true, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;

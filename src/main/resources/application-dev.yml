@@ -1,0 +1,72 @@
+# ──────────────────────────────────────────────────────────────
+# DEV profile — Developer-friendly defaults
+# Activate: SPRING_PROFILES_ACTIVE=dev (or default)
+# ──────────────────────────────────────────────────────────────
+
+spring:
+  datasource:
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      leak-detection-threshold: 30000
+
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        generate_statistics: true
+
+  flyway:
+    clean-disabled: false          # allow flyway:clean in dev
+    out-of-order: true             # allow V8.1 to run after V8 was already applied
+
+  devtools:
+    restart:
+      enabled: true
+
+# ── Server ──
+server:
+  error:
+    include-stacktrace: on_param   # ?trace=true to see stack traces
+  compression:
+    enabled: false                 # skip gzip overhead in dev
+  tomcat:
+    threads:
+      min-spare: 5
+      max: 50
+
+# ── Swagger ON ──
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    try-it-out-enabled: true
+
+# ── Actuator — wide open in dev ──
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+# ── CORS — allow Vite dev server (when not using proxy) ──
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173}
+
+# ── Logging — verbose ──
+logging:
+  level:
+    root: INFO
+    com.ecom360: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE   # log bound parameters
+    org.hibernate.stat: DEBUG
+    org.flywaydb: DEBUG
