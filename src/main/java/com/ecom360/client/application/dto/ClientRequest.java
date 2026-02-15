@@ -9,9 +9,8 @@ public record ClientRequest(
     @Size(max = 255) String email,
     @Size(max = 500) String address,
     @Size(max = 1000) String notes,
-    Boolean isActive
-) {
-    public ClientRequest {
-        if (isActive == null) isActive = true;
-    }
+    Boolean isActive) {
+  public ClientRequest {
+    if (isActive == null) isActive = true;
+  }
 }

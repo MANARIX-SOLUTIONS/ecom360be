@@ -11,5 +11,4 @@ public record ClientPaymentResponse(
     Integer amount,
     String paymentMethod,
     String note,
-    Instant createdAt
-) {}
+    Instant createdAt) {}

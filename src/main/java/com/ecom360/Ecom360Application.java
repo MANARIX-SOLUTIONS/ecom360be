@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties({JwtProperties.class, CorsProperties.class})
 public class Ecom360Application {
 
-    public static void main(String[] args) {
-        SpringApplication.run(Ecom360Application.class, args);
-    }
+  public static void main(String[] args) {
+    SpringApplication.run(Ecom360Application.class, args);
+  }
 }

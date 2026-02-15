@@ -19,15 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class AdminStatsController {
 
-    private final AdminStatsService adminStatsService;
+  private final AdminStatsService adminStatsService;
 
-    public AdminStatsController(AdminStatsService adminStatsService) {
-        this.adminStatsService = adminStatsService;
-    }
+  public AdminStatsController(AdminStatsService adminStatsService) {
+    this.adminStatsService = adminStatsService;
+  }
 
-    @GetMapping
-    @Operation(summary = "Get platform statistics (platform admin)")
-    public ResponseEntity<AdminStatsResponse> getStats(@AuthenticationPrincipal UserPrincipal p) {
-        return ResponseEntity.ok(adminStatsService.getStats(p));
-    }
+  @GetMapping
+  @Operation(summary = "Get platform statistics (platform admin)")
+  public ResponseEntity<AdminStatsResponse> getStats(@AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(adminStatsService.getStats(p));
+  }
 }

@@ -4,12 +4,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record WebhookCreateResponse(
-        UUID id,
-        UUID businessId,
-        String url,
-        String events,
-        Boolean isActive,
-        Instant createdAt,
-        Instant updatedAt,
-        String secret
-) {}
+    UUID id,
+    UUID businessId,
+    String url,
+    String events,
+    Boolean isActive,
+    Instant createdAt,
+    Instant updatedAt,
+    String secret) {}

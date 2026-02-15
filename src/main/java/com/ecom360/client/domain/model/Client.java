@@ -8,60 +8,100 @@ import java.util.UUID;
 @Table(name = "client")
 public class Client extends AggregateRoot {
 
-    @Column(name = "business_id", nullable = false)
-    private UUID businessId;
+  @Column(name = "business_id", nullable = false)
+  private UUID businessId;
 
-    @Column(nullable = false)
-    private String name;
+  @Column(nullable = false)
+  private String name;
 
-    @Column(length = 50)
-    private String phone;
+  @Column(length = 50)
+  private String phone;
 
-    @Column(length = 255)
-    private String email;
+  @Column(length = 255)
+  private String email;
 
-    @Column(columnDefinition = "TEXT")
-    private String address;
+  @Column(columnDefinition = "TEXT")
+  private String address;
 
-    @Column(columnDefinition = "TEXT")
-    private String notes;
+  @Column(columnDefinition = "TEXT")
+  private String notes;
 
-    @Column(name = "credit_balance", nullable = false)
-    private Integer creditBalance = 0;
+  @Column(name = "credit_balance", nullable = false)
+  private Integer creditBalance = 0;
 
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+  @Column(name = "is_active", nullable = false)
+  private Boolean isActive = true;
 
-    public void addCredit(int amount) {
-        this.creditBalance += amount;
-    }
+  public void addCredit(int amount) {
+    this.creditBalance += amount;
+  }
 
-    public void deductCredit(int amount) {
-        this.creditBalance -= amount;
-    }
+  public void deductCredit(int amount) {
+    this.creditBalance -= amount;
+  }
 
-    // Getters and setters
-    public UUID getBusinessId() { return businessId; }
-    public void setBusinessId(UUID v) { this.businessId = v; }
+  // Getters and setters
+  public UUID getBusinessId() {
+    return businessId;
+  }
 
-    public String getName() { return name; }
-    public void setName(String v) { this.name = v; }
+  public void setBusinessId(UUID v) {
+    this.businessId = v;
+  }
 
-    public String getPhone() { return phone; }
-    public void setPhone(String v) { this.phone = v; }
+  public String getName() {
+    return name;
+  }
 
-    public String getEmail() { return email; }
-    public void setEmail(String v) { this.email = v; }
+  public void setName(String v) {
+    this.name = v;
+  }
 
-    public String getAddress() { return address; }
-    public void setAddress(String v) { this.address = v; }
+  public String getPhone() {
+    return phone;
+  }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String v) { this.notes = v; }
+  public void setPhone(String v) {
+    this.phone = v;
+  }
 
-    public Integer getCreditBalance() { return creditBalance; }
-    public void setCreditBalance(Integer v) { this.creditBalance = v; }
+  public String getEmail() {
+    return email;
+  }
 
-    public Boolean getIsActive() { return isActive; }
-    public void setIsActive(Boolean v) { this.isActive = v; }
+  public void setEmail(String v) {
+    this.email = v;
+  }
+
+  public String getAddress() {
+    return address;
+  }
+
+  public void setAddress(String v) {
+    this.address = v;
+  }
+
+  public String getNotes() {
+    return notes;
+  }
+
+  public void setNotes(String v) {
+    this.notes = v;
+  }
+
+  public Integer getCreditBalance() {
+    return creditBalance;
+  }
+
+  public void setCreditBalance(Integer v) {
+    this.creditBalance = v;
+  }
+
+  public Boolean getIsActive() {
+    return isActive;
+  }
+
+  public void setIsActive(Boolean v) {
+    this.isActive = v;
+  }
 }

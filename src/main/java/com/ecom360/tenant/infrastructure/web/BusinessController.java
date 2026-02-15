@@ -19,22 +19,22 @@ import org.springframework.web.bind.annotation.*;
 @SecurityRequirement(name = "bearerAuth")
 public class BusinessController {
 
-    private final BusinessProfileService businessProfileService;
+  private final BusinessProfileService businessProfileService;
 
-    public BusinessController(BusinessProfileService businessProfileService) {
-        this.businessProfileService = businessProfileService;
-    }
+  public BusinessController(BusinessProfileService businessProfileService) {
+    this.businessProfileService = businessProfileService;
+  }
 
-    @GetMapping("/me")
-    @Operation(summary = "Get current business profile")
-    public ResponseEntity<BusinessProfileResponse> getMe(@AuthenticationPrincipal UserPrincipal p) {
-        return ResponseEntity.ok(businessProfileService.get(p));
-    }
+  @GetMapping("/me")
+  @Operation(summary = "Get current business profile")
+  public ResponseEntity<BusinessProfileResponse> getMe(@AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(businessProfileService.get(p));
+  }
 
-    @PutMapping("/me")
-    @Operation(summary = "Update current business profile")
-    public ResponseEntity<BusinessProfileResponse> updateMe(@Valid @RequestBody BusinessProfileRequest req,
-                                                            @AuthenticationPrincipal UserPrincipal p) {
-        return ResponseEntity.ok(businessProfileService.update(req, p));
-    }
+  @PutMapping("/me")
+  @Operation(summary = "Update current business profile")
+  public ResponseEntity<BusinessProfileResponse> updateMe(
+      @Valid @RequestBody BusinessProfileRequest req, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(businessProfileService.update(req, p));
+  }
 }

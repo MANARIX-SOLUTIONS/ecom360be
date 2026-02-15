@@ -1,72 +1,76 @@
 package com.ecom360.catalog.domain.model;
 
 import jakarta.persistence.*;
-
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Table(name = "category")
 public class Category {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-    @Column(name = "business_id", nullable = false)
-    private UUID businessId;
-    @Column(nullable = false)
-    private String name;
-    private String color;
-    @Column(name = "sort_order", nullable = false)
-    private Integer sortOrder = 0;
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+  @Id
+  @GeneratedValue(strategy = GenerationType.UUID)
+  private UUID id;
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = Instant.now();
-    }
+  @Column(name = "business_id", nullable = false)
+  private UUID businessId;
 
-    public UUID getId() {
-        return id;
-    }
+  @Column(nullable = false)
+  private String name;
 
-    public void setId(UUID v) {
-        this.id = v;
-    }
+  private String color;
 
-    public UUID getBusinessId() {
-        return businessId;
-    }
+  @Column(name = "sort_order", nullable = false)
+  private Integer sortOrder = 0;
 
-    public void setBusinessId(UUID v) {
-        this.businessId = v;
-    }
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
 
-    public String getName() {
-        return name;
-    }
+  @PrePersist
+  protected void onCreate() {
+    createdAt = Instant.now();
+  }
 
-    public void setName(String v) {
-        this.name = v;
-    }
+  public UUID getId() {
+    return id;
+  }
 
-    public String getColor() {
-        return color;
-    }
+  public void setId(UUID v) {
+    this.id = v;
+  }
 
-    public void setColor(String v) {
-        this.color = v;
-    }
+  public UUID getBusinessId() {
+    return businessId;
+  }
 
-    public Integer getSortOrder() {
-        return sortOrder;
-    }
+  public void setBusinessId(UUID v) {
+    this.businessId = v;
+  }
 
-    public void setSortOrder(Integer v) {
-        this.sortOrder = v;
-    }
+  public String getName() {
+    return name;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  public void setName(String v) {
+    this.name = v;
+  }
+
+  public String getColor() {
+    return color;
+  }
+
+  public void setColor(String v) {
+    this.color = v;
+  }
+
+  public Integer getSortOrder() {
+    return sortOrder;
+  }
+
+  public void setSortOrder(Integer v) {
+    this.sortOrder = v;
+  }
+
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
 }

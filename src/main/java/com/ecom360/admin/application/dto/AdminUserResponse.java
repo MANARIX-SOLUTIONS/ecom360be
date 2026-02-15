@@ -4,12 +4,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record AdminUserResponse(
-        UUID id,
-        String name,
-        String email,
-        String role,
-        String business,
-        String status,
-        Instant lastLoginAt,
-        Instant createdAt
-) {}
+    UUID id,
+    String name,
+    String email,
+    String role,
+    String business,
+    String status,
+    Instant lastLoginAt,
+    Instant createdAt) {}

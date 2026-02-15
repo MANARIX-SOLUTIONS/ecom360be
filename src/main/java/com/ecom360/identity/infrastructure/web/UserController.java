@@ -19,22 +19,22 @@ import org.springframework.web.bind.annotation.*;
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
 
-    private final UserProfileService userProfileService;
+  private final UserProfileService userProfileService;
 
-    public UserController(UserProfileService userProfileService) {
-        this.userProfileService = userProfileService;
-    }
+  public UserController(UserProfileService userProfileService) {
+    this.userProfileService = userProfileService;
+  }
 
-    @GetMapping("/me")
-    @Operation(summary = "Get current user profile")
-    public ResponseEntity<UserProfileResponse> getMe(@AuthenticationPrincipal UserPrincipal p) {
-        return ResponseEntity.ok(userProfileService.get(p));
-    }
+  @GetMapping("/me")
+  @Operation(summary = "Get current user profile")
+  public ResponseEntity<UserProfileResponse> getMe(@AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(userProfileService.get(p));
+  }
 
-    @PutMapping("/me")
-    @Operation(summary = "Update current user profile")
-    public ResponseEntity<UserProfileResponse> updateMe(@Valid @RequestBody UserProfileRequest req,
-                                                        @AuthenticationPrincipal UserPrincipal p) {
-        return ResponseEntity.ok(userProfileService.update(req, p));
-    }
+  @PutMapping("/me")
+  @Operation(summary = "Update current user profile")
+  public ResponseEntity<UserProfileResponse> updateMe(
+      @Valid @RequestBody UserProfileRequest req, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(userProfileService.update(req, p));
+  }
 }

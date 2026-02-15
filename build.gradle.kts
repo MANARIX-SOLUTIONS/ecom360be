@@ -3,6 +3,7 @@ plugins {
     jacoco
     id("org.springframework.boot") version "3.4.1"
     id("io.spring.dependency-management") version "1.1.6"
+    id("com.diffplug.spotless") version "6.25.0"
 }
 
 group = "com.ecom360"
@@ -81,6 +82,15 @@ tasks.withType<Test> {
     jvmArgs("-XX:+EnableDynamicAgentLoading")
 }
 
+// ── Spotless (formatting) ──
+spotless {
+    java {
+        googleJavaFormat("1.22.0")
+        trimTrailingWhitespace()
+        removeUnusedImports()
+    }
+}
+
 // ── JaCoCo coverage ──
 jacoco {
     toolVersion = "0.8.12"
@@ -119,6 +129,6 @@ tasks.jacocoTestCoverageVerification {
 // ── Convenience task: full quality gate ──
 tasks.register("qualityGate") {
     group = "verification"
-    description = "Runs all quality checks: compile, test, coverage"
-    dependsOn("compileJava", "test", "jacocoTestReport", "jacocoTestCoverageVerification")
+    description = "Runs all quality checks: format, compile, test, coverage"
+    dependsOn("spotlessCheck", "compileJava", "test", "jacocoTestReport", "jacocoTestCoverageVerification")
 }

@@ -55,7 +55,15 @@ Or with custom DB config:
 DB_HOST=localhost DB_PORT=5432 DB_NAME=ecom360 DB_USERNAME=postgres DB_PASSWORD=postgres ./gradlew bootRun
 ```
 
-### 4. API Documentation
+### 4. Format & Quality
+
+```bash
+./gradlew spotlessApply   # format code
+./gradlew spotlessCheck   # check formatting
+./gradlew qualityGate     # format + compile + test + coverage
+```
+
+### 5. API Documentation
 
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/api-docs

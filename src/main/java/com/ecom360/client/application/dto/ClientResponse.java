@@ -14,5 +14,4 @@ public record ClientResponse(
     Integer creditBalance,
     Boolean isActive,
     Instant createdAt,
-    Instant updatedAt
-) {}
+    Instant updatedAt) {}

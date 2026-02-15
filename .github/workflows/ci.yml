@@ -63,6 +63,9 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
+      - name: Check formatting
+        run: ./gradlew spotlessCheck --no-daemon
+
       - name: Compile
         run: ./gradlew compileJava compileTestJava --no-daemon
 
