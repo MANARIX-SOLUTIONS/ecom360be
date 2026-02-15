@@ -1,0 +1,52 @@
+# ──────────────────────────────────────────────────────────────
+# Docker Compose — local development stack
+# Usage: docker compose up -d
+# ──────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecom360-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecom360
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API (dev) ──
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecom360-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ecom360
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: dev-only-secret-key-min-32-characters-long-change-in-prod
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
+    driver: local
