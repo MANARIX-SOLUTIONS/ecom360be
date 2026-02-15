@@ -1,0 +1,19 @@
+# ──────────────────────────────────────────────────────────────
+# CODEOWNERS — automatic PR reviewers
+# Requires branch protection rule: "Require review from Code Owners"
+# ──────────────────────────────────────────────────────────────
+
+# Default: backend team reviews everything
+*                                       @ecom360/backend
+
+# CI/CD changes need DevOps review
+.github/                                @ecom360/devops @ecom360/backend
+Dockerfile                              @ecom360/devops
+docker-compose*.yml                     @ecom360/devops
+
+# Database migrations need DBA/senior review
+src/main/resources/db/migration/        @ecom360/backend-senior
+
+# Security config needs security review
+**/security/                            @ecom360/backend-senior
+**/SecurityConfig*                      @ecom360/backend-senior
