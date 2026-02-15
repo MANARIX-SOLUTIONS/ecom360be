@@ -4,7 +4,7 @@ Backend API for the 360 PME Commerce SaaS platform - a multi-tenant POS and inve
 
 ## Tech Stack
 
-- **Java 21**
+- **Java 17**
 - **Spring Boot 3.4**
 - **Gradle 8.x**
 - **PostgreSQL**
@@ -14,7 +14,7 @@ Backend API for the 360 PME Commerce SaaS platform - a multi-tenant POS and inve
 
 ## Prerequisites
 
-- JDK 21 (or 17 - update `build.gradle.kts` sourceCompatibility if using 17)
+- JDK 17+
 - PostgreSQL 14+
 - Gradle 8.x (or use `./gradlew` wrapper)
 
