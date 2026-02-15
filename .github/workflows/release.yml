@@ -89,7 +89,7 @@ jobs:
         run: ./gradlew clean test jacocoTestReport bootJar --no-daemon
 
       - name: Upload release JAR
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-jar-${{ github.ref_name }}
           path: build/libs/*.jar

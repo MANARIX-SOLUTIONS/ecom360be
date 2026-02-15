@@ -83,7 +83,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results
           path: build/reports/tests/test/
@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: build/reports/jacoco/test/html/
@@ -99,7 +99,7 @@ jobs:
 
       - name: Upload coverage XML (for PR comment)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-xml
           path: build/reports/jacoco/test/jacocoTestReport.xml
@@ -117,7 +117,7 @@ jobs:
         run: ./gradlew bootJar --no-daemon -x test
 
       - name: Upload JAR
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: app-jar
           path: build/libs/*.jar
