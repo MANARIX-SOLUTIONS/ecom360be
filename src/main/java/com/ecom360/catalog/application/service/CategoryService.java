@@ -3,6 +3,7 @@ package com.ecom360.catalog.application.service;
 import com.ecom360.catalog.application.dto.*;
 import com.ecom360.catalog.domain.model.Category;
 import com.ecom360.catalog.domain.repository.CategoryRepository;
+import com.ecom360.catalog.domain.repository.ProductRepository;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import java.util.List;
@@ -12,9 +13,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class CategoryService {
   private final CategoryRepository repo;
+  private final ProductRepository productRepo;
 
-  public CategoryService(CategoryRepository repo) {
+  public CategoryService(CategoryRepository repo, ProductRepository productRepo) {
     this.repo = repo;
+    this.productRepo = productRepo;
   }
 
   public CategoryResponse create(CategoryRequest r, UserPrincipal p) {
@@ -54,7 +57,13 @@ public class CategoryService {
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
-    repo.delete(find(id, p));
+    Category c = find(id, p);
+    long productCount = productRepo.countByBusinessIdAndCategoryId(p.businessId(), id);
+    if (productCount > 0) {
+      throw new BusinessRuleException(
+          "Impossible de supprimer cette catégorie : " + productCount + " produit(s) l'utilisent.");
+    }
+    repo.delete(c);
   }
 
   private Category find(UUID id, UserPrincipal p) {

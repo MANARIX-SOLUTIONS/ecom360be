@@ -27,4 +27,6 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
       @Param("b") UUID b,
       @Param("startDate") LocalDate startDate,
       @Param("endDate") LocalDate endDate);
+
+  long countByBusinessIdAndCategoryId(UUID businessId, UUID categoryId);
 }

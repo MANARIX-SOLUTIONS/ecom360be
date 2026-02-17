@@ -71,10 +71,18 @@ public class ExpenseService {
 
   public void deleteCategory(UUID id, UserPrincipal p) {
     requireBiz(p);
-    catRepo.delete(
+    ExpenseCategory c =
         catRepo
             .findByBusinessIdAndId(p.businessId(), id)
-            .orElseThrow(() -> new ResourceNotFoundException("Expense category", id)));
+            .orElseThrow(() -> new ResourceNotFoundException("Expense category", id));
+    long expenseCount = expenseRepo.countByBusinessIdAndCategoryId(p.businessId(), id);
+    if (expenseCount > 0) {
+      throw new BusinessRuleException(
+          "Impossible de supprimer cette catégorie : "
+              + expenseCount
+              + " dépense(s) l'utilisent.");
+    }
+    catRepo.delete(c);
   }
 
   // ── Expenses ──

@@ -25,4 +25,6 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
   @Query(
       "SELECT p FROM Product p WHERE p.businessId = :bid AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))")
   Page<Product> searchByBusinessId(@Param("bid") UUID bid, @Param("s") String s, Pageable pageable);
+
+  long countByBusinessIdAndCategoryId(UUID businessId, UUID categoryId);
 }
