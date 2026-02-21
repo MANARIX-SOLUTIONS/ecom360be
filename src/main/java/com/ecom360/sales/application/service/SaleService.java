@@ -4,6 +4,8 @@ import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.ProductRepository;
 import com.ecom360.client.domain.model.Client;
 import com.ecom360.client.domain.repository.ClientRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.service.StockService;
 import com.ecom360.sales.application.dto.*;
@@ -32,6 +34,7 @@ public class SaleService {
   private final ClientRepository clientRepo;
   private final StockService stockService;
   private final SubscriptionService subscriptionService;
+  private final RolePermissionService permissionService;
 
   public SaleService(
       SaleRepository saleRepo,
@@ -40,7 +43,8 @@ public class SaleService {
       StoreRepository storeRepo,
       ClientRepository clientRepo,
       StockService stockService,
-      SubscriptionService subscriptionService) {
+      SubscriptionService subscriptionService,
+      RolePermissionService permissionService) {
     this.saleRepo = saleRepo;
     this.lineRepo = lineRepo;
     this.productRepo = productRepo;
@@ -48,11 +52,13 @@ public class SaleService {
     this.clientRepo = clientRepo;
     this.stockService = stockService;
     this.subscriptionService = subscriptionService;
+    this.permissionService = permissionService;
   }
 
   @Transactional
   public SaleResponse createSale(SaleRequest req, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SALES_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -140,6 +146,7 @@ public class SaleService {
 
   public SaleResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SALES_READ);
     return mapSale(
         saleRepo
             .findByBusinessIdAndId(p.businessId(), id)
@@ -148,6 +155,7 @@ public class SaleService {
 
   public Page<SaleResponse> list(UserPrincipal p, UUID storeId, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.SALES_READ);
     Page<Sale> page =
         storeId != null
             ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(p.businessId(), storeId, pg)
@@ -158,6 +166,7 @@ public class SaleService {
   @Transactional
   public SaleResponse voidSale(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SALES_DELETE);
     Sale sale =
         saleRepo
             .findByBusinessIdAndId(p.businessId(), id)

@@ -3,6 +3,8 @@ package com.ecom360.client.application.service;
 import com.ecom360.client.application.dto.*;
 import com.ecom360.client.domain.model.*;
 import com.ecom360.client.domain.repository.*;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
@@ -18,18 +20,22 @@ public class ClientService {
   private final ClientRepository clientRepo;
   private final ClientPaymentRepository paymentRepo;
   private final SubscriptionService subscriptionService;
+  private final RolePermissionService permissionService;
 
   public ClientService(
       ClientRepository clientRepo,
       ClientPaymentRepository paymentRepo,
-      SubscriptionService subscriptionService) {
+      SubscriptionService subscriptionService,
+      RolePermissionService permissionService) {
     this.clientRepo = clientRepo;
     this.paymentRepo = paymentRepo;
     this.subscriptionService = subscriptionService;
+    this.permissionService = permissionService;
   }
 
   public ClientResponse create(ClientRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -57,16 +63,19 @@ public class ClientService {
 
   public Page<ClientResponse> list(UserPrincipal p, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_READ);
     return clientRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg).map(this::map);
   }
 
   public ClientResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_READ);
     return map(find(id, p));
   }
 
   public ClientResponse update(UUID id, ClientRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_UPDATE);
     Client c = find(id, p);
     c.setName(r.name());
     c.setPhone(r.phone());
@@ -79,6 +88,7 @@ public class ClientService {
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_DELETE);
     clientRepo.delete(find(id, p));
   }
 
@@ -86,6 +96,7 @@ public class ClientService {
   public ClientPaymentResponse recordPayment(
       UUID clientId, ClientPaymentRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_UPDATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -119,6 +130,7 @@ public class ClientService {
 
   public Page<ClientPaymentResponse> getPayments(UUID clientId, UserPrincipal p, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.CLIENTS_READ);
     find(clientId, p);
     return paymentRepo
         .findByClientIdOrderByCreatedAtDesc(clientId, pg)

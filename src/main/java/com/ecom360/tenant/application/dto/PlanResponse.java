@@ -26,4 +26,6 @@ public record PlanResponse(
     boolean featureApi,
     boolean featureCustomBranding,
     boolean featurePrioritySupport,
-    boolean featureAccountManager) {}
+    boolean featureAccountManager,
+    boolean featureStockAlerts,
+    int dataRetentionMonths) {}

@@ -76,6 +76,12 @@ public class Plan extends BaseEntity {
   @Column(name = "feature_account_manager", nullable = false)
   private Boolean featureAccountManager = false;
 
+  @Column(name = "feature_stock_alerts", nullable = false)
+  private Boolean featureStockAlerts = false;
+
+  @Column(name = "data_retention_months", nullable = false)
+  private Integer dataRetentionMonths = 0;
+
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
 
@@ -265,6 +271,22 @@ public class Plan extends BaseEntity {
 
   public void setFeatureAccountManager(Boolean v) {
     this.featureAccountManager = v;
+  }
+
+  public Boolean getFeatureStockAlerts() {
+    return featureStockAlerts;
+  }
+
+  public void setFeatureStockAlerts(Boolean v) {
+    this.featureStockAlerts = v;
+  }
+
+  public Integer getDataRetentionMonths() {
+    return dataRetentionMonths;
+  }
+
+  public void setDataRetentionMonths(Integer v) {
+    this.dataRetentionMonths = v;
   }
 
   public Boolean getIsActive() {

@@ -4,6 +4,8 @@ import com.ecom360.catalog.application.dto.*;
 import com.ecom360.catalog.domain.model.Category;
 import com.ecom360.catalog.domain.repository.CategoryRepository;
 import com.ecom360.catalog.domain.repository.ProductRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import java.util.List;
@@ -14,14 +16,20 @@ import org.springframework.stereotype.Service;
 public class CategoryService {
   private final CategoryRepository repo;
   private final ProductRepository productRepo;
+  private final RolePermissionService permissionService;
 
-  public CategoryService(CategoryRepository repo, ProductRepository productRepo) {
+  public CategoryService(
+      CategoryRepository repo,
+      ProductRepository productRepo,
+      RolePermissionService permissionService) {
     this.repo = repo;
     this.productRepo = productRepo;
+    this.permissionService = permissionService;
   }
 
   public CategoryResponse create(CategoryRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CATEGORIES_CREATE);
     if (repo.existsByBusinessIdAndName(p.businessId(), r.name()))
       throw new ResourceAlreadyExistsException("Category", r.name());
     Category c = new Category();
@@ -34,6 +42,7 @@ public class CategoryService {
 
   public List<CategoryResponse> list(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CATEGORIES_READ);
     return repo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
         .map(this::map)
         .toList();
@@ -41,11 +50,13 @@ public class CategoryService {
 
   public CategoryResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CATEGORIES_READ);
     return map(find(id, p));
   }
 
   public CategoryResponse update(UUID id, CategoryRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CATEGORIES_UPDATE);
     Category c = find(id, p);
     if (!c.getName().equals(r.name()) && repo.existsByBusinessIdAndName(p.businessId(), r.name()))
       throw new ResourceAlreadyExistsException("Category", r.name());
@@ -57,6 +68,7 @@ public class CategoryService {
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.CATEGORIES_DELETE);
     Category c = find(id, p);
     long productCount = productRepo.countByBusinessIdAndCategoryId(p.businessId(), id);
     if (productCount > 0) {

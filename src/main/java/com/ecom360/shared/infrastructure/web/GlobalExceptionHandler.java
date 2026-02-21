@@ -84,8 +84,14 @@ public class GlobalExceptionHandler {
         .getAllErrors()
         .forEach(
             error -> {
-              String field = ((FieldError) error).getField();
-              errors.put(field, error.getDefaultMessage());
+              String field =
+                  error instanceof FieldError
+                      ? ((FieldError) error).getField()
+                      : error.getObjectName();
+              errors.merge(
+                  field,
+                  error.getDefaultMessage() != null ? error.getDefaultMessage() : "validation error",
+                  (a, b) -> a + "; " + b);
             });
     ProblemDetail d = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
     d.setTitle("Validation Error");
@@ -98,7 +104,11 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ProblemDetail> handleConstraint(ConstraintViolationException ex) {
     Map<String, String> errors =
         ex.getConstraintViolations().stream()
-            .collect(Collectors.toMap(v -> v.getPropertyPath().toString(), v -> v.getMessage()));
+            .collect(
+                Collectors.toMap(
+                    v -> v.getPropertyPath().toString(),
+                    v -> v.getMessage(),
+                    (a, b) -> b));
     ProblemDetail d = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
     d.setTitle("Validation Error");
     d.setProperty("timestamp", Instant.now());

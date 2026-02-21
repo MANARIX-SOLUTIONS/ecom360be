@@ -1,5 +1,7 @@
 package com.ecom360.store.application.service;
 
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.BusinessRuleException;
@@ -17,14 +19,20 @@ import org.springframework.stereotype.Service;
 public class StoreService {
   private final StoreRepository storeRepository;
   private final SubscriptionService subscriptionService;
+  private final RolePermissionService permissionService;
 
-  public StoreService(StoreRepository storeRepository, SubscriptionService subscriptionService) {
+  public StoreService(
+      StoreRepository storeRepository,
+      SubscriptionService subscriptionService,
+      RolePermissionService permissionService) {
     this.storeRepository = storeRepository;
     this.subscriptionService = subscriptionService;
+    this.permissionService = permissionService;
   }
 
   public StoreResponse create(StoreRequest req, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STORES_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -45,11 +53,13 @@ public class StoreService {
 
   public StoreResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STORES_READ);
     return map(find(id, p));
   }
 
   public List<StoreResponse> list(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STORES_READ);
     return storeRepository.findByBusinessIdAndIsActive(p.businessId(), true).stream()
         .map(this::map)
         .toList();
@@ -57,6 +67,7 @@ public class StoreService {
 
   public StoreResponse update(UUID id, StoreRequest req, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STORES_UPDATE);
     Store s = find(id, p);
     s.setName(req.name());
     s.setAddress(req.address());
@@ -67,6 +78,7 @@ public class StoreService {
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STORES_DELETE);
     storeRepository.delete(find(id, p));
   }
 

@@ -4,6 +4,8 @@ import com.ecom360.catalog.application.dto.*;
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.CategoryRepository;
 import com.ecom360.catalog.domain.repository.ProductRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
@@ -18,18 +20,22 @@ public class ProductService {
   private final ProductRepository productRepo;
   private final CategoryRepository categoryRepo;
   private final SubscriptionService subscriptionService;
+  private final RolePermissionService permissionService;
 
   public ProductService(
       ProductRepository productRepo,
       CategoryRepository categoryRepo,
-      SubscriptionService subscriptionService) {
+      SubscriptionService subscriptionService,
+      RolePermissionService permissionService) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
     this.subscriptionService = subscriptionService;
+    this.permissionService = permissionService;
   }
 
   public ProductResponse create(ProductRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PRODUCTS_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -60,11 +66,13 @@ public class ProductService {
 
   public ProductResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PRODUCTS_READ);
     return map(find(id, p));
   }
 
   public Page<ProductResponse> list(UserPrincipal p, Pageable pg, String search) {
     requireBiz(p);
+    permissionService.require(p, Permission.PRODUCTS_READ);
     Page<Product> page =
         (search != null && !search.isBlank())
             ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
@@ -75,6 +83,7 @@ public class ProductService {
   @Transactional
   public ProductResponse update(UUID id, ProductRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PRODUCTS_UPDATE);
     Product prod = find(id, p);
     if (r.sku() != null
         && !r.sku().isBlank()
@@ -91,6 +100,7 @@ public class ProductService {
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PRODUCTS_DELETE);
     productRepo.delete(find(id, p));
   }
 

@@ -2,6 +2,8 @@ package com.ecom360.tenant.application.service;
 
 import com.ecom360.catalog.domain.repository.ProductRepository;
 import com.ecom360.client.domain.repository.ClientRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.sales.domain.repository.SaleRepository;
 import com.ecom360.store.domain.repository.StoreRepository;
@@ -26,6 +28,7 @@ public class SubscriptionUsageService {
   private final ClientRepository clientRepository;
   private final SupplierRepository supplierRepository;
   private final SaleRepository saleRepository;
+  private final RolePermissionService permissionService;
 
   public SubscriptionUsageService(
       SubscriptionService subscriptionService,
@@ -34,7 +37,8 @@ public class SubscriptionUsageService {
       ProductRepository productRepository,
       ClientRepository clientRepository,
       SupplierRepository supplierRepository,
-      SaleRepository saleRepository) {
+      SaleRepository saleRepository,
+      RolePermissionService permissionService) {
     this.subscriptionService = subscriptionService;
     this.businessUserRepository = businessUserRepository;
     this.storeRepository = storeRepository;
@@ -42,12 +46,14 @@ public class SubscriptionUsageService {
     this.clientRepository = clientRepository;
     this.supplierRepository = supplierRepository;
     this.saleRepository = saleRepository;
+    this.permissionService = permissionService;
   }
 
   public SubscriptionUsageResponse getUsage(UserPrincipal p) {
     if (!p.hasBusinessAccess()) {
       return new SubscriptionUsageResponse(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
+    permissionService.require(p, Permission.SUBSCRIPTION_READ);
     UUID businessId = p.businessId();
 
     int usersCount = businessUserRepository.findByBusinessIdAndIsActive(businessId, true).size();

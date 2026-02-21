@@ -1,5 +1,7 @@
 package com.ecom360.tenant.application.service;
 
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.BusinessRuleException;
@@ -25,11 +27,15 @@ public class SubscriptionService {
 
   private final SubscriptionRepository subscriptionRepository;
   private final PlanRepository planRepository;
+  private final RolePermissionService permissionService;
 
   public SubscriptionService(
-      SubscriptionRepository subscriptionRepository, PlanRepository planRepository) {
+      SubscriptionRepository subscriptionRepository,
+      PlanRepository planRepository,
+      RolePermissionService permissionService) {
     this.subscriptionRepository = subscriptionRepository;
     this.planRepository = planRepository;
+    this.permissionService = permissionService;
   }
 
   /** Create trial subscription (Pro plan, 30 days) for new business. */
@@ -56,6 +62,7 @@ public class SubscriptionService {
 
   public Optional<SubscriptionResponse> getCurrent(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_READ);
     return subscriptionRepository
         .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(p.businessId(), ACTIVE_STATUSES)
         .map(
@@ -78,6 +85,7 @@ public class SubscriptionService {
 
   public List<PlanResponse> listPlans(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_READ);
     return planRepository.findByIsActiveTrueOrderByPriceMonthlyAsc().stream()
         .map(this::toPlanResponse)
         .toList();
@@ -105,6 +113,7 @@ public class SubscriptionService {
   @Transactional
   public SubscriptionResponse changePlan(String planSlug, String billingCycle, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
     Plan plan =
         planRepository
             .findBySlug(planSlug)
@@ -147,6 +156,7 @@ public class SubscriptionService {
   @Transactional
   public void cancelSubscription(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
     Subscription sub =
         subscriptionRepository
             .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(p.businessId(), ACTIVE_STATUSES)
@@ -180,7 +190,9 @@ public class SubscriptionService {
         Boolean.TRUE.equals(plan.getFeatureApi()),
         Boolean.TRUE.equals(plan.getFeatureCustomBranding()),
         Boolean.TRUE.equals(plan.getFeaturePrioritySupport()),
-        Boolean.TRUE.equals(plan.getFeatureAccountManager()));
+        Boolean.TRUE.equals(plan.getFeatureAccountManager()),
+        Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
+        plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
   }
 
   private void requireBiz(UserPrincipal p) {

@@ -1,6 +1,8 @@
 package com.ecom360.tenant.application.service;
 
 import com.ecom360.identity.application.service.AuthService;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.domain.model.User;
 import com.ecom360.identity.domain.repository.UserRepository;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
@@ -34,6 +36,7 @@ public class BusinessUserService {
   private final SubscriptionService subscriptionService;
   private final AuthService authService;
   private final EmailService emailService;
+  private final RolePermissionService permissionService;
 
   public BusinessUserService(
       BusinessUserRepository businessUserRepository,
@@ -42,7 +45,8 @@ public class BusinessUserService {
       PasswordEncoder passwordEncoder,
       SubscriptionService subscriptionService,
       AuthService authService,
-      EmailService emailService) {
+      EmailService emailService,
+      RolePermissionService permissionService) {
     this.businessUserRepository = businessUserRepository;
     this.userRepository = userRepository;
     this.businessRepository = businessRepository;
@@ -50,10 +54,12 @@ public class BusinessUserService {
     this.subscriptionService = subscriptionService;
     this.authService = authService;
     this.emailService = emailService;
+    this.permissionService = permissionService;
   }
 
   public List<BusinessUserResponse> list(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.BUSINESS_USERS_READ);
     return businessUserRepository.findByBusinessIdAndIsActive(p.businessId(), true).stream()
         .map(
             bu -> {
@@ -75,6 +81,7 @@ public class BusinessUserService {
   @Transactional
   public BusinessUserResponse invite(InviteUserRequest req, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.BUSINESS_USERS_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(

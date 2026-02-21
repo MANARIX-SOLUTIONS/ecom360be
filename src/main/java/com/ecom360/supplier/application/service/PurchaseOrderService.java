@@ -1,6 +1,8 @@
 package com.ecom360.supplier.application.service;
 
 import com.ecom360.catalog.domain.repository.ProductRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.service.StockService;
 import com.ecom360.shared.domain.exception.*;
@@ -23,6 +25,7 @@ public class PurchaseOrderService {
   private final ProductRepository productRepo;
   private final StoreRepository storeRepo;
   private final StockService stockService;
+  private final RolePermissionService permissionService;
 
   public PurchaseOrderService(
       PurchaseOrderRepository poRepo,
@@ -30,18 +33,21 @@ public class PurchaseOrderService {
       SupplierRepository supplierRepo,
       ProductRepository productRepo,
       StoreRepository storeRepo,
-      StockService stockService) {
+      StockService stockService,
+      RolePermissionService permissionService) {
     this.poRepo = poRepo;
     this.lineRepo = lineRepo;
     this.supplierRepo = supplierRepo;
     this.productRepo = productRepo;
     this.storeRepo = storeRepo;
     this.stockService = stockService;
+    this.permissionService = permissionService;
   }
 
   @Transactional
   public PurchaseOrderResponse create(PurchaseOrderRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PURCHASE_ORDERS_CREATE);
     supplierRepo
         .findByBusinessIdAndId(p.businessId(), r.supplierId())
         .orElseThrow(() -> new ResourceNotFoundException("Supplier", r.supplierId()));
@@ -83,6 +89,7 @@ public class PurchaseOrderService {
 
   public PurchaseOrderResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
     return mapPO(
         poRepo
             .findByBusinessIdAndId(p.businessId(), id)
@@ -92,6 +99,7 @@ public class PurchaseOrderService {
   public Page<PurchaseOrderResponse> list(
       UserPrincipal p, String status, UUID supplierId, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
     if (status != null)
       return poRepo
           .findByBusinessIdAndStatusOrderByCreatedAtDesc(p.businessId(), status, pg)
@@ -106,6 +114,7 @@ public class PurchaseOrderService {
   @Transactional
   public PurchaseOrderResponse updateStatus(UUID id, String newStatus, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
     PurchaseOrder po =
         poRepo
             .findByBusinessIdAndId(p.businessId(), id)

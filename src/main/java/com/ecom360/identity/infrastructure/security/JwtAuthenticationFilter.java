@@ -34,8 +34,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     try {
       String jwt = extractJwt(request);
-      if (StringUtils.hasText(jwt) && "access".equals(jwtService.parseToken(jwt).type())) {
+      if (StringUtils.hasText(jwt)) {
         JwtService.JwtClaims claims = jwtService.parseToken(jwt);
+        if (!"access".equals(claims.type())) {
+          filterChain.doFilter(request, response);
+          return;
+        }
 
         List<SimpleGrantedAuthority> authorities = new ArrayList<>();
         if (claims.role() != null) {

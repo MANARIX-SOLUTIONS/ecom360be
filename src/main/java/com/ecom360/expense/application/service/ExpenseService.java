@@ -3,6 +3,8 @@ package com.ecom360.expense.application.service;
 import com.ecom360.expense.application.dto.*;
 import com.ecom360.expense.domain.model.*;
 import com.ecom360.expense.domain.repository.*;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
@@ -17,19 +19,23 @@ public class ExpenseService {
   private final ExpenseRepository expenseRepo;
   private final ExpenseCategoryRepository catRepo;
   private final SubscriptionService subscriptionService;
+  private final RolePermissionService permissionService;
 
   public ExpenseService(
       ExpenseRepository expenseRepo,
       ExpenseCategoryRepository catRepo,
-      SubscriptionService subscriptionService) {
+      SubscriptionService subscriptionService,
+      RolePermissionService permissionService) {
     this.expenseRepo = expenseRepo;
     this.catRepo = catRepo;
     this.subscriptionService = subscriptionService;
+    this.permissionService = permissionService;
   }
 
   // ── Categories ──
   public ExpenseCategoryResponse createCategory(ExpenseCategoryRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -51,6 +57,7 @@ public class ExpenseService {
 
   public List<ExpenseCategoryResponse> listCategories(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_READ);
     return catRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
         .map(this::mapCat)
         .toList();
@@ -59,6 +66,7 @@ public class ExpenseService {
   public ExpenseCategoryResponse updateCategory(
       UUID id, ExpenseCategoryRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_UPDATE);
     ExpenseCategory c =
         catRepo
             .findByBusinessIdAndId(p.businessId(), id)
@@ -71,6 +79,7 @@ public class ExpenseService {
 
   public void deleteCategory(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_DELETE);
     ExpenseCategory c =
         catRepo
             .findByBusinessIdAndId(p.businessId(), id)
@@ -88,6 +97,7 @@ public class ExpenseService {
   // ── Expenses ──
   public ExpenseResponse create(ExpenseRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_CREATE);
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -114,6 +124,7 @@ public class ExpenseService {
 
   public Page<ExpenseResponse> list(UserPrincipal p, UUID categoryId, UUID storeId, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_READ);
     if (categoryId != null)
       return expenseRepo
           .findByBusinessIdAndCategoryIdOrderByExpenseDateDesc(p.businessId(), categoryId, pg)
@@ -127,6 +138,7 @@ public class ExpenseService {
 
   public ExpenseResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_READ);
     return mapExp(
         expenseRepo
             .findByBusinessIdAndId(p.businessId(), id)
@@ -135,6 +147,7 @@ public class ExpenseService {
 
   public ExpenseResponse update(UUID id, ExpenseRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_UPDATE);
     Expense e =
         expenseRepo
             .findByBusinessIdAndId(p.businessId(), id)
@@ -150,6 +163,7 @@ public class ExpenseService {
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.EXPENSES_DELETE);
     expenseRepo.delete(
         expenseRepo
             .findByBusinessIdAndId(p.businessId(), id)

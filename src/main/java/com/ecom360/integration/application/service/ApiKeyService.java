@@ -1,5 +1,7 @@
 package com.ecom360.integration.application.service;
 
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.integration.application.dto.ApiKeyRequest;
 import com.ecom360.integration.application.dto.ApiKeyResponse;
@@ -23,14 +25,17 @@ public class ApiKeyService {
   private static final String KEY_PREFIX = "ecom360_";
 
   private final ApiKeyRepository apiKeyRepository;
+  private final RolePermissionService permissionService;
 
-  public ApiKeyService(ApiKeyRepository apiKeyRepository) {
+  public ApiKeyService(ApiKeyRepository apiKeyRepository, RolePermissionService permissionService) {
     this.apiKeyRepository = apiKeyRepository;
+    this.permissionService = permissionService;
   }
 
   @Transactional
   public ApiKeyResponse create(ApiKeyRequest request, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.API_KEYS_CREATE);
     String rawKey = generateRawKey();
     String keyHash = hashKey(rawKey);
 
@@ -56,6 +61,7 @@ public class ApiKeyService {
 
   public List<ApiKeyResponse> list(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.API_KEYS_READ);
     return apiKeyRepository.findByBusinessId(p.businessId()).stream()
         .map(this::toResponse)
         .toList();
@@ -63,12 +69,14 @@ public class ApiKeyService {
 
   public ApiKeyResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.API_KEYS_READ);
     return toResponse(find(id, p));
   }
 
   @Transactional
   public void revoke(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.API_KEYS_DELETE);
     ApiKey apiKey = find(id, p);
     apiKey.setIsActive(false);
     apiKeyRepository.save(apiKey);

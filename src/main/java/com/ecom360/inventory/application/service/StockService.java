@@ -2,6 +2,8 @@ package com.ecom360.inventory.application.service;
 
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.ProductRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.dto.*;
 import com.ecom360.inventory.domain.model.*;
@@ -22,21 +24,25 @@ public class StockService {
   private final StockMovementRepository movementRepo;
   private final ProductRepository productRepo;
   private final StoreRepository storeRepo;
+  private final RolePermissionService permissionService;
 
   public StockService(
       ProductStoreStockRepository stockRepo,
       StockMovementRepository movementRepo,
       ProductRepository productRepo,
-      StoreRepository storeRepo) {
+      StoreRepository storeRepo,
+      RolePermissionService permissionService) {
     this.stockRepo = stockRepo;
     this.movementRepo = movementRepo;
     this.productRepo = productRepo;
     this.storeRepo = storeRepo;
+    this.permissionService = permissionService;
   }
 
   @Transactional
   public StockLevelResponse initializeStock(StockInitRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STOCK_INIT);
     verifyProduct(r.productId(), p.businessId());
     verifyStore(r.storeId(), p.businessId());
     if (stockRepo.existsByProductIdAndStoreId(r.productId(), r.storeId()))
@@ -65,18 +71,33 @@ public class StockService {
   @Transactional
   public StockMovementResponse adjustStock(StockAdjustmentRequest r, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STOCK_ADJUST);
     verifyProduct(r.productId(), p.businessId());
     verifyStore(r.storeId(), p.businessId());
     ProductStoreStock s =
         stockRepo
             .findByProductIdAndStoreId(r.productId(), r.storeId())
-            .orElseThrow(() -> new ResourceNotFoundException("Stock not initialized"));
+            .orElseGet(
+                () -> {
+                  if (!"adjustment".equals(r.type()))
+                    throw new ResourceNotFoundException("Stock not initialized");
+                  ProductStoreStock n = new ProductStoreStock();
+                  n.setProductId(r.productId());
+                  n.setStoreId(r.storeId());
+                  n.setQuantity(0);
+                  n.setMinStock(0);
+                  return stockRepo.save(n);
+                });
     int before = s.getQuantity();
     int delta =
         switch (r.type()) {
           case "in" -> Math.abs(r.quantity());
           case "out" -> -Math.abs(r.quantity());
-          case "adjustment" -> r.quantity();
+          case "adjustment" -> {
+            if (r.quantity() < 0)
+              throw new BusinessRuleException("Quantity cannot be negative");
+            yield r.quantity() - before;
+          }
           default -> throw new BusinessRuleException("Invalid type");
         };
     if (before + delta < 0) throw new BusinessRuleException("Insufficient stock");
@@ -99,12 +120,14 @@ public class StockService {
 
   public List<StockLevelResponse> getStockByStore(UUID storeId, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STOCK_READ);
     verifyStore(storeId, p.businessId());
     return stockRepo.findByStoreId(storeId).stream().map(this::mapLevel).toList();
   }
 
   public StockLevelResponse getStockLevel(UUID productId, UUID storeId, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.STOCK_READ);
     return mapLevel(
         stockRepo
             .findByProductIdAndStoreId(productId, storeId)
@@ -114,6 +137,7 @@ public class StockService {
   public Page<StockMovementResponse> getMovements(
       UUID productId, UUID storeId, UserPrincipal p, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.STOCK_READ);
     return movementRepo
         .findByProductIdAndStoreIdOrderByCreatedAtDesc(productId, storeId, pg)
         .map(this::mapMov);
@@ -122,6 +146,7 @@ public class StockService {
   public Page<StockMovementResponse> getMovementsByStore(
       UUID storeId, UserPrincipal p, Pageable pg) {
     requireBiz(p);
+    permissionService.require(p, Permission.STOCK_READ);
     verifyStore(storeId, p.businessId());
     return movementRepo.findByStoreIdOrderByCreatedAtDesc(storeId, pg).map(this::mapMov);
   }

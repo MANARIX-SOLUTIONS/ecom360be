@@ -1,5 +1,7 @@
 package com.ecom360.integration.application.service;
 
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.integration.application.dto.WebhookCreateResponse;
 import com.ecom360.integration.application.dto.WebhookRequest;
@@ -22,14 +24,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class WebhookService {
 
   private final WebhookRepository webhookRepository;
+  private final RolePermissionService permissionService;
 
-  public WebhookService(WebhookRepository webhookRepository) {
+  public WebhookService(WebhookRepository webhookRepository, RolePermissionService permissionService) {
     this.webhookRepository = webhookRepository;
+    this.permissionService = permissionService;
   }
 
   @Transactional
   public WebhookCreateResponse create(WebhookRequest request, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.WEBHOOKS_CREATE);
     String secret = generateSecret();
     String secretHash = hashSecret(secret);
 
@@ -54,6 +59,7 @@ public class WebhookService {
 
   public List<WebhookResponse> list(UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.WEBHOOKS_READ);
     return webhookRepository.findByBusinessId(p.businessId()).stream()
         .map(this::toResponse)
         .toList();
@@ -61,12 +67,14 @@ public class WebhookService {
 
   public WebhookResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.WEBHOOKS_READ);
     return toResponse(find(id, p));
   }
 
   @Transactional
   public WebhookResponse update(UUID id, WebhookRequest request, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.WEBHOOKS_UPDATE);
     Webhook webhook = find(id, p);
     webhook.setUrl(request.url());
     webhook.setEvents(request.events());
@@ -78,6 +86,7 @@ public class WebhookService {
   @Transactional
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    permissionService.require(p, Permission.WEBHOOKS_DELETE);
     webhookRepository.delete(find(id, p));
   }
 
