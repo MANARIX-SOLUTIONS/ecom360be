@@ -1,8 +1,8 @@
 package com.ecom360.identity.domain.model;
 
 /**
- * Permissions granulaires par ressource et action.
- * Le périmètre est activé selon le rôle (propriétaire, gestionnaire, caissier).
+ * Permissions granulaires par ressource et action. Le périmètre est activé selon le rôle
+ * (propriétaire, gestionnaire, caissier).
  */
 public enum Permission {
   // Produits

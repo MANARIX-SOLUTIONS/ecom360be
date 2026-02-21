@@ -26,7 +26,8 @@ public class WebhookService {
   private final WebhookRepository webhookRepository;
   private final RolePermissionService permissionService;
 
-  public WebhookService(WebhookRepository webhookRepository, RolePermissionService permissionService) {
+  public WebhookService(
+      WebhookRepository webhookRepository, RolePermissionService permissionService) {
     this.webhookRepository = webhookRepository;
     this.permissionService = permissionService;
   }

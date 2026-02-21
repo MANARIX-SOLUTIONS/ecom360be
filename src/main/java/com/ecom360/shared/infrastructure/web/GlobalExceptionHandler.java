@@ -90,7 +90,9 @@ public class GlobalExceptionHandler {
                       : error.getObjectName();
               errors.merge(
                   field,
-                  error.getDefaultMessage() != null ? error.getDefaultMessage() : "validation error",
+                  error.getDefaultMessage() != null
+                      ? error.getDefaultMessage()
+                      : "validation error",
                   (a, b) -> a + "; " + b);
             });
     ProblemDetail d = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
@@ -106,9 +108,7 @@ public class GlobalExceptionHandler {
         ex.getConstraintViolations().stream()
             .collect(
                 Collectors.toMap(
-                    v -> v.getPropertyPath().toString(),
-                    v -> v.getMessage(),
-                    (a, b) -> b));
+                    v -> v.getPropertyPath().toString(), v -> v.getMessage(), (a, b) -> b));
     ProblemDetail d = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
     d.setTitle("Validation Error");
     d.setProperty("timestamp", Instant.now());

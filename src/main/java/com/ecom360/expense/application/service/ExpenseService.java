@@ -87,9 +87,7 @@ public class ExpenseService {
     long expenseCount = expenseRepo.countByBusinessIdAndCategoryId(p.businessId(), id);
     if (expenseCount > 0) {
       throw new BusinessRuleException(
-          "Impossible de supprimer cette catégorie : "
-              + expenseCount
-              + " dépense(s) l'utilisent.");
+          "Impossible de supprimer cette catégorie : " + expenseCount + " dépense(s) l'utilisent.");
     }
     catRepo.delete(c);
   }

@@ -8,22 +8,18 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
- * Active le périmètre des fonctionnalités selon le rôle utilisateur :
- * - propriétaire : accès complet
- * - gestionnaire : accès large (sauf abonnement, suppression propriétaire)
- * - caissier : ventes, lecture produits/clients/stock/boutiques
+ * Active le périmètre des fonctionnalités selon le rôle utilisateur : - propriétaire : accès
+ * complet - gestionnaire : accès large (sauf abonnement, suppression propriétaire) - caissier :
+ * ventes, lecture produits/clients/stock/boutiques
  */
 @Service
 public class RolePermissionService {
 
-  private static final Set<Permission> PROPRIETAIRE =
-      EnumSet.allOf(Permission.class);
+  private static final Set<Permission> PROPRIETAIRE = EnumSet.allOf(Permission.class);
 
   private static final Set<Permission> GESTIONNAIRE =
       EnumSet.complementOf(
-          EnumSet.of(
-              Permission.SUBSCRIPTION_UPDATE,
-              Permission.BUSINESS_USERS_DELETE));
+          EnumSet.of(Permission.SUBSCRIPTION_UPDATE, Permission.BUSINESS_USERS_DELETE));
 
   private static final Set<Permission> CAISSIER =
       EnumSet.of(
@@ -37,9 +33,7 @@ public class RolePermissionService {
           Permission.SALES_UPDATE,
           Permission.SALES_DELETE);
 
-  /**
-   * Vérifie que l'utilisateur a la permission. Lance AccessDeniedException sinon.
-   */
+  /** Vérifie que l'utilisateur a la permission. Lance AccessDeniedException sinon. */
   public void require(UserPrincipal p, Permission perm) {
     if (!can(p, perm)) {
       throw new AccessDeniedException(
@@ -47,21 +41,20 @@ public class RolePermissionService {
     }
   }
 
-  /**
-   * Retourne true si l'utilisateur a la permission.
-   */
+  /** Retourne true si l'utilisateur a la permission. */
   public boolean can(UserPrincipal p, Permission perm) {
     if (p == null) return false;
     if (p.isPlatformAdmin()) return true;
     if (!p.hasBusinessAccess()) return false;
 
     String role = p.role() != null ? p.role().toLowerCase() : "";
-    Set<Permission> allowed = switch (role) {
-      case "proprietaire", "propriétaire" -> PROPRIETAIRE;
-      case "gestionnaire" -> GESTIONNAIRE;
-      case "caissier" -> CAISSIER;
-      default -> Set.of();
-    };
+    Set<Permission> allowed =
+        switch (role) {
+          case "proprietaire", "propriétaire" -> PROPRIETAIRE;
+          case "gestionnaire" -> GESTIONNAIRE;
+          case "caissier" -> CAISSIER;
+          default -> Set.of();
+        };
     return allowed.contains(perm);
   }
 }

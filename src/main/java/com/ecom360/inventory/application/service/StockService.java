@@ -94,8 +94,7 @@ public class StockService {
           case "in" -> Math.abs(r.quantity());
           case "out" -> -Math.abs(r.quantity());
           case "adjustment" -> {
-            if (r.quantity() < 0)
-              throw new BusinessRuleException("Quantity cannot be negative");
+            if (r.quantity() < 0) throw new BusinessRuleException("Quantity cannot be negative");
             yield r.quantity() - before;
           }
           default -> throw new BusinessRuleException("Invalid type");
