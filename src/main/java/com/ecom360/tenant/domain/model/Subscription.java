@@ -30,13 +30,55 @@ public class Subscription extends BaseEntity {
   @Column(name = "cancelled_at")
   private LocalDate cancelledAt;
 
+  @Column(name = "cancel_at_period_end")
+  private Boolean cancelAtPeriodEnd = false;
+
+  @Column(name = "expired_at")
+  private LocalDate expiredAt;
+
+  @Column(name = "grace_period_ends_at")
+  private LocalDate gracePeriodEndsAt;
+
   public boolean isActive() {
-    return "active".equals(status) || "trialing".equals(status);
+    return SubscriptionStatus.ACCESS_GRANTING.contains(status);
   }
 
-  public void cancel() {
-    this.status = "cancelled";
+  public boolean isTrialing() {
+    return SubscriptionStatus.TRIALING.equals(status);
+  }
+
+  public boolean isExpired() {
+    return SubscriptionStatus.EXPIRED.equals(status);
+  }
+
+  public boolean isCancelled() {
+    return SubscriptionStatus.CANCELLED.equals(status);
+  }
+
+  public boolean isPastDue() {
+    return SubscriptionStatus.PAST_DUE.equals(status);
+  }
+
+  public void cancelImmediate() {
+    this.status = SubscriptionStatus.CANCELLED;
     this.cancelledAt = LocalDate.now();
+    this.cancelAtPeriodEnd = false;
+  }
+
+  public void cancelAtPeriodEnd() {
+    this.cancelAtPeriodEnd = true;
+  }
+
+  public void expire() {
+    this.status = SubscriptionStatus.EXPIRED;
+    this.expiredAt = LocalDate.now();
+    this.cancelAtPeriodEnd = false;
+  }
+
+  public void markCancelled() {
+    this.status = SubscriptionStatus.CANCELLED;
+    this.cancelledAt = LocalDate.now();
+    this.cancelAtPeriodEnd = false;
   }
 
   public UUID getBusinessId() {
@@ -93,5 +135,29 @@ public class Subscription extends BaseEntity {
 
   public void setCancelledAt(LocalDate v) {
     this.cancelledAt = v;
+  }
+
+  public Boolean getCancelAtPeriodEnd() {
+    return cancelAtPeriodEnd != null && cancelAtPeriodEnd;
+  }
+
+  public void setCancelAtPeriodEnd(Boolean v) {
+    this.cancelAtPeriodEnd = v != null ? v : false;
+  }
+
+  public LocalDate getExpiredAt() {
+    return expiredAt;
+  }
+
+  public void setExpiredAt(LocalDate v) {
+    this.expiredAt = v;
+  }
+
+  public LocalDate getGracePeriodEndsAt() {
+    return gracePeriodEndsAt;
+  }
+
+  public void setGracePeriodEndsAt(LocalDate v) {
+    this.gracePeriodEndsAt = v;
   }
 }

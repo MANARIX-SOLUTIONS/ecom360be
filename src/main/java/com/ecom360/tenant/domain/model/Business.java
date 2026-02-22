@@ -2,6 +2,7 @@ package com.ecom360.tenant.domain.model;
 
 import com.ecom360.shared.domain.model.AggregateRoot;
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
@@ -36,6 +37,9 @@ public class Business extends AggregateRoot {
 
   @Column(name = "trial_ends_at")
   private LocalDate trialEndsAt;
+
+  @Column(name = "trial_used_at")
+  private Instant trialUsedAt;
 
   protected Business() {}
 
@@ -139,5 +143,18 @@ public class Business extends AggregateRoot {
 
   public void setTrialEndsAt(LocalDate trialEndsAt) {
     this.trialEndsAt = trialEndsAt;
+  }
+
+  public Instant getTrialUsedAt() {
+    return trialUsedAt;
+  }
+
+  public void setTrialUsedAt(Instant trialUsedAt) {
+    this.trialUsedAt = trialUsedAt;
+  }
+
+  /** True if this business has already used its trial (expired or converted to paid). */
+  public boolean hasUsedTrial() {
+    return trialUsedAt != null;
   }
 }

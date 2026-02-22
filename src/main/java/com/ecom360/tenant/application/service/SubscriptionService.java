@@ -8,11 +8,16 @@ import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.tenant.application.dto.PlanResponse;
 import com.ecom360.tenant.application.dto.SubscriptionResponse;
+import com.ecom360.tenant.domain.model.Business;
 import com.ecom360.tenant.domain.model.Plan;
 import com.ecom360.tenant.domain.model.Subscription;
+import com.ecom360.tenant.domain.model.SubscriptionStatus;
+import com.ecom360.tenant.domain.repository.BusinessRepository;
 import com.ecom360.tenant.domain.repository.PlanRepository;
 import com.ecom360.tenant.domain.repository.SubscriptionRepository;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,25 +27,36 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SubscriptionService {
 
-  private static final List<String> ACTIVE_STATUSES = List.of("active", "trialing");
   private static final int TRIAL_DAYS = 30;
 
   private final SubscriptionRepository subscriptionRepository;
   private final PlanRepository planRepository;
+  private final BusinessRepository businessRepository;
   private final RolePermissionService permissionService;
 
   public SubscriptionService(
       SubscriptionRepository subscriptionRepository,
       PlanRepository planRepository,
+      BusinessRepository businessRepository,
       RolePermissionService permissionService) {
     this.subscriptionRepository = subscriptionRepository;
     this.planRepository = planRepository;
+    this.businessRepository = businessRepository;
     this.permissionService = permissionService;
   }
 
-  /** Create trial subscription (Pro plan, 30 days) for new business. */
+  /** Create trial subscription for new business. Trial allowed only once per business. */
   @Transactional
   public void createTrialForNewBusiness(UUID businessId) {
+    Business business =
+        businessRepository
+            .findById(businessId)
+            .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    if (business.hasUsedTrial()) {
+      throw new BusinessRuleException(
+          "L'essai gratuit n'est utilisable qu'une seule fois. Veuillez souscrire à un plan.");
+    }
+
     Plan proPlan =
         planRepository
             .findBySlug("pro")
@@ -50,37 +66,34 @@ public class SubscriptionService {
                     .orElseThrow(() -> new ResourceNotFoundException("Plan", "any")));
     LocalDate start = LocalDate.now();
     LocalDate end = start.plusDays(TRIAL_DAYS);
+
     Subscription sub = new Subscription();
     sub.setBusinessId(businessId);
     sub.setPlanId(proPlan.getId());
     sub.setBillingCycle("monthly");
-    sub.setStatus("trialing");
+    sub.setStatus(SubscriptionStatus.TRIALING);
     sub.setCurrentPeriodStart(start);
     sub.setCurrentPeriodEnd(end);
     subscriptionRepository.save(sub);
+
+    businessRepository
+        .findById(businessId)
+        .ifPresent(
+            biz -> {
+              biz.setTrialEndsAt(end);
+              biz.setStatus("trial");
+              businessRepository.save(biz);
+            });
   }
 
   public Optional<SubscriptionResponse> getCurrent(UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_READ);
     return subscriptionRepository
-        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(p.businessId(), ACTIVE_STATUSES)
-        .map(
-            sub -> {
-              Plan plan =
-                  planRepository
-                      .findById(sub.getPlanId())
-                      .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
-              return new SubscriptionResponse(
-                  sub.getId(),
-                  plan.getId(),
-                  plan.getSlug(),
-                  plan.getName(),
-                  sub.getBillingCycle(),
-                  sub.getStatus(),
-                  sub.getCurrentPeriodStart(),
-                  sub.getCurrentPeriodEnd());
-            });
+        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
+            p.businessId(), SubscriptionStatus.ACCESS_GRANTING)
+        .filter(this::notExpiredOrExpireLazy)
+        .map(this::toSubscriptionResponse);
   }
 
   public List<PlanResponse> listPlans(UserPrincipal p) {
@@ -95,25 +108,35 @@ public class SubscriptionService {
   public String getPlanSlugForBusiness(UUID businessId) {
     if (businessId == null) return null;
     return subscriptionRepository
-        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(businessId, ACTIVE_STATUSES)
+        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
+            businessId, SubscriptionStatus.ACCESS_GRANTING)
+        .filter(this::notExpiredOrExpireLazy)
         .flatMap(sub -> planRepository.findById(sub.getPlanId()).map(Plan::getSlug))
         .orElse(null);
   }
 
   /**
    * Get current plan for business. Returns empty if no active subscription (no limits enforced).
+   * Lazy-expires subscriptions past period end when detected.
    */
   public Optional<Plan> getPlanForBusiness(UUID businessId) {
     if (businessId == null) return Optional.empty();
     return subscriptionRepository
-        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(businessId, ACTIVE_STATUSES)
+        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
+            businessId, SubscriptionStatus.ACCESS_GRANTING)
+        .filter(this::notExpiredOrExpireLazy)
         .flatMap(sub -> planRepository.findById(sub.getPlanId()));
   }
 
+  /**
+   * Subscribe or change plan. Handles: trial→paid, expired→paid, active→upgrade/downgrade,
+   * cancelled→reactivate.
+   */
   @Transactional
   public SubscriptionResponse changePlan(String planSlug, String billingCycle, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
+
     Plan plan =
         planRepository
             .findBySlug(planSlug)
@@ -121,48 +144,116 @@ public class SubscriptionService {
     if (!Boolean.TRUE.equals(plan.getIsActive())) {
       throw new BusinessRuleException("Plan is not available");
     }
+
     String cycle = "yearly".equalsIgnoreCase(billingCycle) ? "yearly" : "monthly";
     LocalDate start = LocalDate.now();
     LocalDate end = cycle.equals("yearly") ? start.plusYears(1) : start.plusMonths(1);
 
-    subscriptionRepository
-        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(p.businessId(), ACTIVE_STATUSES)
-        .ifPresent(
-            sub -> {
-              sub.setStatus("cancelled");
-              sub.setCancelledAt(LocalDate.now());
-              subscriptionRepository.save(sub);
-            });
+    Optional<Subscription> currentOpt =
+        subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId());
+
+    if (currentOpt.isPresent()) {
+      Subscription current = currentOpt.get();
+      if (current.isActive()) {
+        if (current.getPlanId().equals(plan.getId())
+            && cycle.equals(current.getBillingCycle())) {
+          throw new BusinessRuleException("Already on this plan and billing cycle");
+        }
+        current.cancelImmediate();
+        subscriptionRepository.save(current);
+      }
+    }
 
     Subscription sub = new Subscription();
     sub.setBusinessId(p.businessId());
     sub.setPlanId(plan.getId());
     sub.setBillingCycle(cycle);
-    sub.setStatus("active");
+    sub.setStatus(SubscriptionStatus.ACTIVE);
     sub.setCurrentPeriodStart(start);
     sub.setCurrentPeriodEnd(end);
     sub = subscriptionRepository.save(sub);
+
+    businessRepository
+        .findById(p.businessId())
+        .ifPresent(
+            biz -> {
+              biz.activate();
+              biz.setTrialEndsAt(null);
+              biz.setTrialUsedAt(Instant.now());
+              businessRepository.save(biz);
+            });
+
+    return toSubscriptionResponse(sub);
+  }
+
+  /**
+   * Cancel subscription. By default cancels at period end (keeps access until then). Use
+   * cancelImmediate for instant cancellation.
+   */
+  @Transactional
+  public void cancelSubscription(boolean atPeriodEnd, UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
+    Subscription sub =
+        subscriptionRepository
+            .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
+                p.businessId(), SubscriptionStatus.ACCESS_GRANTING)
+            .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
+
+    if (atPeriodEnd) {
+      sub.cancelAtPeriodEnd();
+      subscriptionRepository.save(sub);
+    } else {
+      sub.cancelImmediate();
+      subscriptionRepository.save(sub);
+    }
+  }
+
+  /** Reactivate a cancelled subscription (before period end). */
+  @Transactional
+  public SubscriptionResponse reactivateSubscription(UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
+    Subscription sub =
+        subscriptionRepository
+            .findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId())
+            .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
+
+    if (!sub.getCancelAtPeriodEnd()) {
+      throw new BusinessRuleException("No subscription to reactivate");
+    }
+    if (LocalDate.now().isAfter(sub.getCurrentPeriodEnd())) {
+      throw new BusinessRuleException("Subscription period has ended");
+    }
+
+    sub.setCancelAtPeriodEnd(false);
+    subscriptionRepository.save(sub);
+    Plan plan =
+        planRepository
+            .findById(sub.getPlanId())
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
+    return toSubscriptionResponse(sub);
+  }
+
+  private SubscriptionResponse toSubscriptionResponse(Subscription sub) {
+    Plan plan =
+        planRepository
+            .findById(sub.getPlanId())
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
+    long daysRemaining =
+        ChronoUnit.DAYS.between(LocalDate.now(), sub.getCurrentPeriodEnd());
     return new SubscriptionResponse(
         sub.getId(),
         plan.getId(),
         plan.getSlug(),
         plan.getName(),
-        cycle,
+        sub.getBillingCycle(),
         sub.getStatus(),
-        start,
-        end);
-  }
-
-  @Transactional
-  public void cancelSubscription(UserPrincipal p) {
-    requireBiz(p);
-    permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
-    Subscription sub =
-        subscriptionRepository
-            .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(p.businessId(), ACTIVE_STATUSES)
-            .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
-    sub.cancel();
-    subscriptionRepository.save(sub);
+        sub.getCurrentPeriodStart(),
+        sub.getCurrentPeriodEnd(),
+        sub.getCancelAtPeriodEnd(),
+        Math.max(0, daysRemaining),
+        sub.isTrialing());
   }
 
   private PlanResponse toPlanResponse(Plan plan) {
@@ -193,6 +284,36 @@ public class SubscriptionService {
         Boolean.TRUE.equals(plan.getFeatureAccountManager()),
         Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
         plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
+  }
+
+  /**
+   * Lazy expiration: if subscription period has ended, expire it and return false. Otherwise return
+   * true. Runs in its own transaction when a write is needed.
+   */
+  @Transactional
+  public boolean notExpiredOrExpireLazy(Subscription sub) {
+    if (sub.getCurrentPeriodEnd().isBefore(LocalDate.now())) {
+      if (sub.getCancelAtPeriodEnd()) {
+        sub.markCancelled();
+      } else {
+        sub.expire();
+      }
+      subscriptionRepository.save(sub);
+      if (sub.isTrialing()) {
+        businessRepository
+            .findById(sub.getBusinessId())
+            .ifPresent(
+                biz -> {
+                  if ("trial".equals(biz.getStatus()) || "active".equals(biz.getStatus())) {
+                    biz.setStatus("expired");
+                    biz.setTrialUsedAt(Instant.now());
+                    businessRepository.save(biz);
+                  }
+                });
+      }
+      return false;
+    }
+    return true;
   }
 
   private void requireBiz(UserPrincipal p) {

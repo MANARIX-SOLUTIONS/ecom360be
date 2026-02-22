@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -59,15 +58,21 @@ public class AdminBusinessService {
 
   public Page<AdminBusinessResponse> list(
       UserPrincipal p, int page, int size, String search, String status, String planSlug) {
-    Pageable pageable =
-        PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "createdAt"));
+    int pageSize = Math.min(size, 100);
+    Pageable pageable = PageRequest.of(page, pageSize);
     String q = (search != null && !search.isBlank()) ? search.trim() : null;
     String st = (status != null && !status.isBlank()) ? status.trim() : null;
     String plan =
         (planSlug != null && !planSlug.isBlank() && !"all".equalsIgnoreCase(planSlug))
             ? planSlug.trim()
             : null;
-    Page<Business> businesses = businessRepository.searchByNameOrOwner(q, st, plan, pageable);
+
+    Page<Business> businesses;
+    if (q == null && st == null && plan == null) {
+      businesses = businessRepository.findAllByOrderByCreatedAtDesc(pageable);
+    } else {
+      businesses = businessRepository.searchByNameOrOwner(q, st, plan, pageable);
+    }
 
     List<UUID> bizIds = businesses.getContent().stream().map(Business::getId).toList();
     Map<UUID, String> ownerMap = loadOwners(bizIds);

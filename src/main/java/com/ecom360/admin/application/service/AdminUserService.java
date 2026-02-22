@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,15 +58,21 @@ public class AdminUserService {
 
   public Page<AdminUserResponse> list(
       UserPrincipal p, int page, int size, String search, String status, String role) {
-    Pageable pageable =
-        PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "createdAt"));
+    int pageSize = Math.min(size, 100);
+    Pageable pageable = PageRequest.of(page, pageSize);
     String q = (search != null && !search.isBlank()) ? search.trim() : null;
     Boolean active = null;
     if (status != null && "active".equals(status.trim())) active = true;
     else if (status != null
         && ("disabled".equals(status.trim()) || "inactive".equals(status.trim()))) active = false;
     String roleSlug = mapRoleToSlug(role);
-    Page<User> users = userRepository.searchByNameEmailOrBusiness(q, active, roleSlug, pageable);
+
+    Page<User> users;
+    if (q == null && active == null && roleSlug == null) {
+      users = userRepository.findAllByOrderByCreatedAtDesc(pageable);
+    } else {
+      users = userRepository.searchByNameEmailOrBusiness(q, active, roleSlug, pageable);
+    }
 
     List<UUID> userIds = users.getContent().stream().map(User::getId).toList();
     Map<UUID, String> roleMap = loadPrimaryRole(userIds);

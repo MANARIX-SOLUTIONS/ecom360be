@@ -27,14 +27,19 @@ public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
   private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+  private final com.ecom360.tenant.infrastructure.security.SubscriptionRequiredFilter
+      subscriptionRequiredFilter;
   private final CorsProperties corsProperties;
 
   public SecurityConfig(
       JwtAuthenticationFilter jwtAuthenticationFilter,
       JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+      com.ecom360.tenant.infrastructure.security.SubscriptionRequiredFilter
+          subscriptionRequiredFilter,
       CorsProperties corsProperties) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+    this.subscriptionRequiredFilter = subscriptionRequiredFilter;
     this.corsProperties = corsProperties;
   }
 
@@ -69,7 +74,8 @@ public class SecurityConfig {
                     .hasRole("PLATFORM_ADMIN")
                     .anyRequest()
                     .authenticated())
-        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(subscriptionRequiredFilter, JwtAuthenticationFilter.class);
     return http.build();
   }
 

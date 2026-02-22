@@ -11,4 +11,7 @@ public record SubscriptionResponse(
     String billingCycle,
     String status,
     LocalDate currentPeriodStart,
-    LocalDate currentPeriodEnd) {}
+    LocalDate currentPeriodEnd,
+    Boolean cancelAtPeriodEnd,
+    long daysRemaining,
+    boolean isTrialing) {}

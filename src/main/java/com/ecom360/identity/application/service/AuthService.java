@@ -220,11 +220,14 @@ public class AuthService {
   }
 
   private AuthResponse buildAuthResponse(User user, UUID businessId, String role) {
+    // Platform admins get PLATFORM_ADMIN role so frontend grants backoffice access
+    String effectiveRole = user.isPlatformAdmin() ? "PLATFORM_ADMIN" : role;
     String accessToken =
         jwtService.generateAccessToken(
-            user.getId(), user.getEmail(), businessId, role, user.isPlatformAdmin());
+            user.getId(), user.getEmail(), businessId, effectiveRole, user.isPlatformAdmin());
     String refreshToken = jwtService.generateRefreshToken(user.getId());
-    String planSlug = subscriptionService.getPlanSlugForBusiness(businessId);
+    String planSlug =
+        businessId != null ? subscriptionService.getPlanSlugForBusiness(businessId) : null;
     return new AuthResponse(
         accessToken,
         refreshToken,
@@ -233,7 +236,7 @@ public class AuthService {
         user.getEmail(),
         user.getFullName(),
         businessId,
-        role,
+        effectiveRole,
         planSlug);
   }
 }
