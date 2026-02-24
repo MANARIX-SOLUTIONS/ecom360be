@@ -14,9 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NotificationService {
   private final NotificationRepository repo;
+  private final NotificationPreferenceService preferenceService;
 
-  public NotificationService(NotificationRepository repo) {
+  public NotificationService(
+      NotificationRepository repo, NotificationPreferenceService preferenceService) {
     this.repo = repo;
+    this.preferenceService = preferenceService;
   }
 
   public Page<NotificationResponse> list(UserPrincipal p, Boolean unreadOnly, Pageable pg) {
@@ -47,6 +50,9 @@ public class NotificationService {
 
   public void createNotification(
       UUID businessId, UUID userId, String type, String title, String body, String actionUrl) {
+    if (!preferenceService.isEnabled(userId, type)) {
+      return;
+    }
     Notification n = new Notification();
     n.setBusinessId(businessId);
     n.setUserId(userId);
