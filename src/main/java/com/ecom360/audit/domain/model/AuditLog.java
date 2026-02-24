@@ -36,6 +36,9 @@ public class AuditLog {
   @Column(name = "ip_address")
   private String ipAddress;
 
+  @Column(name = "request_id")
+  private String requestId;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -51,7 +54,8 @@ public class AuditLog {
       String entityType,
       UUID entityId,
       Map<String, Object> changes,
-      String ip) {
+      String ip,
+      String requestId) {
     AuditLog l = new AuditLog();
     l.businessId = bizId;
     l.userId = userId;
@@ -60,6 +64,7 @@ public class AuditLog {
     l.entityId = entityId;
     l.changes = changes;
     l.ipAddress = ip;
+    l.requestId = requestId;
     return l;
   }
 
@@ -129,5 +134,13 @@ public class AuditLog {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public String getRequestId() {
+    return requestId;
+  }
+
+  public void setRequestId(String v) {
+    this.requestId = v;
   }
 }

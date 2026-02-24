@@ -13,4 +13,5 @@ public record AuditLogResponse(
     UUID entityId,
     Map<String, Object> changes,
     String ipAddress,
+    String requestId,
     Instant createdAt) {}
