@@ -16,8 +16,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Adds a unique request-id to every HTTP request (MDC + response header). Logs request method, URI,
- * status code and duration.
+ * Adds a unique request-id to every HTTP request (MDC + response header). Populates RequestContext
+ * with requestId and client IP. Logs request method, URI, status code and duration.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -38,6 +38,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     MDC.put("requestId", requestId);
     response.setHeader(ApiConstants.X_REQUEST_ID, requestId);
 
+    String clientIp = RequestContext.extractClientIp(request);
+    RequestContext.set(requestId, clientIp);
+
     long start = System.currentTimeMillis();
     try {
       chain.doFilter(request, response);
@@ -51,6 +54,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             response.getStatus(),
             duration);
       }
+      RequestContext.clear();
       MDC.clear();
     }
   }

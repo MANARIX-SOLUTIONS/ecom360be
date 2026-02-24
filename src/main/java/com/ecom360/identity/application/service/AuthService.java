@@ -1,5 +1,6 @@
 package com.ecom360.identity.application.service;
 
+import com.ecom360.audit.application.service.AuditLogService;
 import com.ecom360.identity.application.dto.*;
 import com.ecom360.identity.domain.model.PasswordReset;
 import com.ecom360.identity.domain.model.User;
@@ -37,6 +38,7 @@ public class AuthService {
   private final BusinessUserRepository businessUserRepository;
   private final PasswordResetRepository passwordResetRepository;
   private final SubscriptionService subscriptionService;
+  private final AuditLogService auditLogService;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final JwtProperties jwtProperties;
@@ -48,6 +50,7 @@ public class AuthService {
       BusinessUserRepository businessUserRepository,
       PasswordResetRepository passwordResetRepository,
       SubscriptionService subscriptionService,
+      AuditLogService auditLogService,
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
       JwtProperties jwtProperties,
@@ -57,6 +60,7 @@ public class AuthService {
     this.businessUserRepository = businessUserRepository;
     this.passwordResetRepository = passwordResetRepository;
     this.subscriptionService = subscriptionService;
+    this.auditLogService = auditLogService;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.jwtProperties = jwtProperties;
@@ -87,6 +91,14 @@ public class AuthService {
             .findFirst()
             .orElseThrow(() -> new BusinessRuleException("No active business membership found"));
 
+    auditLogService.logAsync(
+        active.getBusinessId(),
+        user.getId(),
+        "LOGIN",
+        "Auth",
+        user.getId(),
+        java.util.Map.of("email", user.getEmail()));
+
     return buildAuthResponse(user, active.getBusinessId(), active.getRole());
   }
 
@@ -114,6 +126,14 @@ public class AuthService {
     businessUserRepository.save(bu);
 
     subscriptionService.createTrialForNewBusiness(business.getId());
+
+    auditLogService.logAsync(
+        business.getId(),
+        user.getId(),
+        "REGISTER",
+        "Auth",
+        user.getId(),
+        java.util.Map.of("email", user.getEmail(), "businessName", business.getName()));
 
     return buildAuthResponse(user, business.getId(), "proprietaire");
   }
@@ -177,7 +197,7 @@ public class AuthService {
   }
 
   @Transactional
-  public void changePassword(UUID userId, ChangePasswordRequest request) {
+  public void changePassword(UUID userId, UUID businessId, ChangePasswordRequest request) {
     User user =
         userRepository
             .findById(userId)
@@ -187,6 +207,11 @@ public class AuthService {
     }
     user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
     userRepository.save(user);
+
+    if (businessId != null) {
+      auditLogService.logAsync(
+          businessId, userId, "PASSWORD_CHANGE", "Auth", userId, java.util.Map.of());
+    }
   }
 
   @Transactional

@@ -60,7 +60,7 @@ public class AuthController {
   @SecurityRequirement(name = "bearerAuth")
   public ResponseEntity<Void> changePassword(
       @Valid @RequestBody ChangePasswordRequest request, @AuthenticationPrincipal UserPrincipal p) {
-    authService.changePassword(p.userId(), request);
+    authService.changePassword(p.userId(), p.businessId(), request);
     return ResponseEntity.noContent().build();
   }
 }

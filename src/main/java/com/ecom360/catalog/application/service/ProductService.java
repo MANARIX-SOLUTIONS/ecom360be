@@ -1,5 +1,6 @@
 package com.ecom360.catalog.application.service;
 
+import com.ecom360.audit.application.service.AuditLogService;
 import com.ecom360.catalog.application.dto.*;
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.CategoryRepository;
@@ -9,6 +10,7 @@ import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,16 +23,19 @@ public class ProductService {
   private final CategoryRepository categoryRepo;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
+  private final AuditLogService auditLogService;
 
   public ProductService(
       ProductRepository productRepo,
       CategoryRepository categoryRepo,
       SubscriptionService subscriptionService,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      AuditLogService auditLogService) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
+    this.auditLogService = auditLogService;
   }
 
   public ProductResponse create(ProductRequest r, UserPrincipal p) {
@@ -61,7 +66,15 @@ public class ProductService {
     Product prod = new Product();
     prod.setBusinessId(p.businessId());
     applyFields(prod, r);
-    return map(productRepo.save(prod));
+    Product saved = productRepo.save(prod);
+    auditLogService.logAsync(
+        p.businessId(),
+        p.userId(),
+        "CREATE",
+        "Product",
+        saved.getId(),
+        Map.of("name", saved.getName(), "sku", saved.getSku() != null ? saved.getSku() : ""));
+    return map(saved);
   }
 
   public ProductResponse getById(UUID id, UserPrincipal p) {
@@ -95,13 +108,29 @@ public class ProductService {
             .noneMatch(c -> c.getId().equals(r.categoryId())))
       throw new ResourceNotFoundException("Category", r.categoryId());
     applyFields(prod, r);
-    return map(productRepo.save(prod));
+    Product saved = productRepo.save(prod);
+    auditLogService.logAsync(
+        p.businessId(),
+        p.userId(),
+        "UPDATE",
+        "Product",
+        id,
+        Map.of("name", saved.getName()));
+    return map(saved);
   }
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.PRODUCTS_DELETE);
-    productRepo.delete(find(id, p));
+    Product prod = find(id, p);
+    auditLogService.logAsync(
+        p.businessId(),
+        p.userId(),
+        "DELETE",
+        "Product",
+        id,
+        Map.of("name", prod.getName()));
+    productRepo.delete(prod);
   }
 
   private Product find(UUID id, UserPrincipal p) {
