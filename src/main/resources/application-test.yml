@@ -6,8 +6,7 @@
 
 spring:
   datasource:
-    # CI can override via env vars; defaults point to TC-managed PG
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ecom360_test}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360_test}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     hikari:

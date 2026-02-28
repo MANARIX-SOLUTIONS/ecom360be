@@ -10,9 +10,12 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
-  # ── Datasource (overridden per-profile) ──
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ecom360}
+    # Single placeholder only — avoids literal ${DB_HOST} when env is not loaded (e.g. systemd)
+#    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-odd-surf-aiz9l39y-pooler.c-4.us-east-1.aws.neon.tech/ecom360pmedb_dev?sslmode=require&channelBinding=require}
+#    username: ${DB_USERNAME:neondb_owner}
+#    password: ${DB_PASSWORD:npg_X17KrjSIoVmD}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -35,7 +38,7 @@ spring:
   # ── JPA / Hibernate ──
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate:
@@ -63,8 +66,8 @@ spring:
 
   # ── Mail (optional — set MAIL_HOST to enable; when empty, emails are logged only) ──
   mail:
-    host: ${MAIL_HOST:}
-    port: ${MAIL_PORT:587}
+    host: ${MAIL_HOST:maildev}
+    port: ${MAIL_PORT:1025}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     default-encoding: UTF-8
@@ -138,6 +141,8 @@ api:
 # ── App (frontend URL for email links) ──
 app:
   url: ${APP_URL:http://localhost:5173}
+  subscription:
+    expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
     allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS

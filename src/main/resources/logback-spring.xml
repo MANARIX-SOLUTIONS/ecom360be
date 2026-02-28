@@ -9,7 +9,7 @@
     <springProfile name="dev | default">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%15.15thread] %cyan(%-40.40logger{39}) : %msg%n</pattern>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%15.15thread] [%X{requestId:-}] %cyan(%-40.40logger{39}) : %msg%n</pattern>
                 <charset>UTF-8</charset>
             </encoder>
         </appender>
@@ -51,6 +51,7 @@
                     <version>[ignore]</version>
                 </fieldNames>
                 <customFields>{"service":"${APP_NAME}"}</customFields>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
             </encoder>
         </appender>
 
@@ -63,7 +64,9 @@
                 <maxHistory>30</maxHistory>
                 <totalSizeCap>3GB</totalSizeCap>
             </rollingPolicy>
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+            </encoder>
         </appender>
 
         <root level="WARN">

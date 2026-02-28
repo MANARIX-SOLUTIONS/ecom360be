@@ -18,7 +18,7 @@ spring:
         generate_statistics: true
 
   flyway:
-    clean-disabled: false          # allow flyway:clean in dev
+    clean-disabled: false # allow flyway:clean in dev
     out-of-order: true             # allow V8.1 to run after V8 was already applied
 
   devtools:
