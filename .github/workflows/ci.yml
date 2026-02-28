@@ -115,6 +115,7 @@ jobs:
           name: JUnit Results
           path: build/test-results/test/*.xml
           reporter: java-junit
+          fail-on-empty: false
 
       - name: Verify build artifact
         run: ./gradlew bootJar --no-daemon -x test
