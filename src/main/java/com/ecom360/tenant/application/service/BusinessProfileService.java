@@ -29,6 +29,10 @@ public class BusinessProfileService {
 
   @Transactional
   public BusinessProfileResponse update(BusinessProfileRequest req, UserPrincipal p) {
+    String role = p.role() != null ? p.role() : "";
+    if (!"proprietaire".equalsIgnoreCase(role) && !p.isPlatformAdmin()) {
+      throw new AccessDeniedException("Seul le rôle propriétaire peut modifier les informations de l'entreprise");
+    }
     Business b = findBusiness(p);
     UUID currentId = b.getId();
     if (!req.email().equalsIgnoreCase(b.getEmail())) {
