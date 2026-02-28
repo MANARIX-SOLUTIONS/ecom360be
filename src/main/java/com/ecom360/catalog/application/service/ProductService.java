@@ -46,7 +46,7 @@ public class ProductService {
         .ifPresent(
             plan -> {
               if (!plan.isUnlimited(plan.getMaxProducts())) {
-                long count = productRepo.countByBusinessId(p.businessId());
+                long count = productRepo.countByBusinessIdAndIsActive(p.businessId(), true);
                 if (count >= plan.getMaxProducts()) {
                   throw new BusinessRuleException(
                       "Limite du plan atteinte : maximum "
@@ -130,7 +130,8 @@ public class ProductService {
         "Product",
         id,
         Map.of("name", prod.getName()));
-    productRepo.delete(prod);
+    prod.setIsActive(false);
+    productRepo.save(prod);
   }
 
   private Product find(UUID id, UserPrincipal p) {

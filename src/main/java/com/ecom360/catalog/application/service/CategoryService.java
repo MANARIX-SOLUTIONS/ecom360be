@@ -70,7 +70,8 @@ public class CategoryService {
     requireBiz(p);
     permissionService.require(p, Permission.CATEGORIES_DELETE);
     Category c = find(id, p);
-    long productCount = productRepo.countByBusinessIdAndCategoryId(p.businessId(), id);
+    long productCount =
+        productRepo.countByBusinessIdAndCategoryIdAndIsActive(p.businessId(), id, true);
     if (productCount > 0) {
       throw new BusinessRuleException(
           "Impossible de supprimer cette catégorie : " + productCount + " produit(s) l'utilisent.");

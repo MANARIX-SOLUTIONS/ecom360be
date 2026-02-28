@@ -14,6 +14,8 @@ import org.springframework.stereotype.Repository;
 public interface ProductRepository extends JpaRepository<Product, UUID> {
   Page<Product> findByBusinessIdAndIsActive(UUID businessId, Boolean isActive, Pageable pageable);
 
+  long countByBusinessIdAndIsActive(UUID businessId, Boolean isActive);
+
   Page<Product> findByBusinessId(UUID businessId, Pageable pageable);
 
   Optional<Product> findByBusinessIdAndId(UUID businessId, UUID id);
@@ -27,4 +29,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
   Page<Product> searchByBusinessId(@Param("bid") UUID bid, @Param("s") String s, Pageable pageable);
 
   long countByBusinessIdAndCategoryId(UUID businessId, UUID categoryId);
+
+  long countByBusinessIdAndCategoryIdAndIsActive(
+      UUID businessId, UUID categoryId, Boolean isActive);
 }
