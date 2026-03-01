@@ -19,7 +19,9 @@ public class RolePermissionService {
 
   private static final Set<Permission> GESTIONNAIRE =
       EnumSet.complementOf(
-          EnumSet.of(Permission.SUBSCRIPTION_UPDATE, Permission.BUSINESS_USERS_DELETE));
+          EnumSet.of(
+              Permission.SUBSCRIPTION_UPDATE,
+              Permission.BUSINESS_USERS_DELETE));
 
   private static final Set<Permission> CAISSIER =
       EnumSet.of(

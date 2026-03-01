@@ -8,6 +8,8 @@ import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -120,9 +122,38 @@ public class ExpenseService {
     return mapExp(expenseRepo.save(e));
   }
 
-  public Page<ExpenseResponse> list(UserPrincipal p, UUID categoryId, UUID storeId, Pageable pg) {
+  public Page<ExpenseResponse> list(
+      UserPrincipal p,
+      UUID categoryId,
+      UUID storeId,
+      Integer month,
+      Integer year,
+      Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.EXPENSES_READ);
+    LocalDate startDate = null;
+    LocalDate endDate = null;
+    if (month != null && year != null && month >= 1 && month <= 12) {
+      YearMonth ym = YearMonth.of(year, month);
+      startDate = ym.atDay(1);
+      endDate = ym.atEndOfMonth();
+    }
+    if (startDate != null && endDate != null) {
+      if (categoryId != null)
+        return expenseRepo
+            .findByBusinessIdAndCategoryIdAndExpenseDateBetweenOrderByExpenseDateDesc(
+                p.businessId(), categoryId, startDate, endDate, pg)
+            .map(this::mapExp);
+      if (storeId != null)
+        return expenseRepo
+            .findByBusinessIdAndStoreIdAndExpenseDateBetweenOrderByExpenseDateDesc(
+                p.businessId(), storeId, startDate, endDate, pg)
+            .map(this::mapExp);
+      return expenseRepo
+          .findByBusinessIdAndExpenseDateBetweenOrderByExpenseDateDesc(
+              p.businessId(), startDate, endDate, pg)
+          .map(this::mapExp);
+    }
     if (categoryId != null)
       return expenseRepo
           .findByBusinessIdAndCategoryIdOrderByExpenseDateDesc(p.businessId(), categoryId, pg)

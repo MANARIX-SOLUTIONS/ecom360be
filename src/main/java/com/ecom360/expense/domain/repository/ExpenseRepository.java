@@ -19,6 +19,15 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
 
   Page<Expense> findByBusinessIdAndStoreIdOrderByExpenseDateDesc(UUID bId, UUID sId, Pageable p);
 
+  Page<Expense> findByBusinessIdAndExpenseDateBetweenOrderByExpenseDateDesc(
+      UUID bId, LocalDate start, LocalDate end, Pageable p);
+
+  Page<Expense> findByBusinessIdAndCategoryIdAndExpenseDateBetweenOrderByExpenseDateDesc(
+      UUID bId, UUID cId, LocalDate start, LocalDate end, Pageable p);
+
+  Page<Expense> findByBusinessIdAndStoreIdAndExpenseDateBetweenOrderByExpenseDateDesc(
+      UUID bId, UUID sId, LocalDate start, LocalDate end, Pageable p);
+
   Optional<Expense> findByBusinessIdAndId(UUID bId, UUID id);
 
   @Query(

@@ -70,12 +70,14 @@ public class ExpenseController {
   public ResponseEntity<PageResponse<ExpenseResponse>> list(
       @RequestParam(required = false) UUID categoryId,
       @RequestParam(required = false) UUID storeId,
+      @RequestParam(required = false) Integer month,
+      @RequestParam(required = false) Integer year,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(
         PageResponse.of(
-            svc.list(p, categoryId, storeId, PageRequest.of(page, Math.min(size, 100)))));
+            svc.list(p, categoryId, storeId, month, year, PageRequest.of(page, Math.min(size, 100)))));
   }
 
   @GetMapping("/{id}")

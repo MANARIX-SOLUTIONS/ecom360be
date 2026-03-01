@@ -122,6 +122,7 @@ public class DashboardService {
                         s.getReceiptNumber(),
                         s.getTotal() != null ? s.getTotal() : 0,
                         s.getPaymentMethod(),
+                        s.getStatus() != null ? s.getStatus() : "completed",
                         s.getCreatedAt().toString()))
             .toList();
 

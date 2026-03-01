@@ -79,6 +79,9 @@ public class Plan extends BaseEntity {
   @Column(name = "feature_stock_alerts", nullable = false)
   private Boolean featureStockAlerts = false;
 
+  @Column(name = "feature_delivery_couriers", nullable = false)
+  private Boolean featureDeliveryCouriers = false;
+
   @Column(name = "data_retention_months", nullable = false)
   private Integer dataRetentionMonths = 0;
 
@@ -279,6 +282,14 @@ public class Plan extends BaseEntity {
 
   public void setFeatureStockAlerts(Boolean v) {
     this.featureStockAlerts = v;
+  }
+
+  public Boolean getFeatureDeliveryCouriers() {
+    return featureDeliveryCouriers;
+  }
+
+  public void setFeatureDeliveryCouriers(Boolean v) {
+    this.featureDeliveryCouriers = v;
   }
 
   public Integer getDataRetentionMonths() {

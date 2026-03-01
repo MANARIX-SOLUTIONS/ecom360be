@@ -25,6 +25,7 @@ public record DashboardResponse(
       String receiptNumber,
       int total,
       String paymentMethod,
+      String status,
       String createdAt) {}
 
   public record TopProduct(

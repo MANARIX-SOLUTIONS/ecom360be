@@ -283,6 +283,7 @@ public class SubscriptionService {
         Boolean.TRUE.equals(plan.getFeaturePrioritySupport()),
         Boolean.TRUE.equals(plan.getFeatureAccountManager()),
         Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
+        Boolean.TRUE.equals(plan.getFeatureDeliveryCouriers()),
         plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
   }
 
