@@ -2,6 +2,7 @@ package com.ecom360.delivery.infrastructure.web;
 
 import com.ecom360.delivery.application.dto.CourierRequest;
 import com.ecom360.delivery.application.dto.CourierResponse;
+import com.ecom360.delivery.application.dto.CourierStatsResponse;
 import com.ecom360.delivery.application.service.CourierService;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
@@ -35,11 +36,25 @@ public class CourierController {
     return ResponseEntity.ok(courierService.list(p, activeOnly));
   }
 
+  @GetMapping("/stats")
+  @Operation(summary = "Get performance stats for all couriers")
+  public ResponseEntity<List<CourierStatsResponse>> getAllStats(
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(courierService.getAllStats(p));
+  }
+
   @GetMapping("/{id}")
   @Operation(summary = "Get courier by id")
   public ResponseEntity<CourierResponse> get(
       @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(courierService.getById(id, p));
+  }
+
+  @GetMapping("/{id}/stats")
+  @Operation(summary = "Get performance stats for one courier")
+  public ResponseEntity<CourierStatsResponse> getStats(
+      @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(courierService.getStats(id, p));
   }
 
   @PostMapping
