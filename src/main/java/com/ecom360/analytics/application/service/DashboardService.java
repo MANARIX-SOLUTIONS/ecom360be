@@ -1,10 +1,13 @@
 package com.ecom360.analytics.application.service;
 
 import com.ecom360.analytics.application.dto.DashboardResponse;
+import com.ecom360.analytics.application.dto.GlobalViewResponse;
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.ProductRepository;
 import com.ecom360.client.domain.repository.ClientRepository;
 import com.ecom360.expense.domain.repository.ExpenseRepository;
+import com.ecom360.identity.application.service.RolePermissionService;
+import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.domain.model.ProductStoreStock;
 import com.ecom360.inventory.domain.repository.ProductStoreStockRepository;
@@ -16,8 +19,15 @@ import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.store.domain.model.Store;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.supplier.domain.repository.SupplierRepository;
-import java.time.*;
-import java.util.*;
+import com.ecom360.tenant.application.service.SubscriptionService;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,6 +42,8 @@ public class DashboardService {
   private final SupplierRepository supplierRepo;
   private final ExpenseRepository expenseRepo;
   private final ProductStoreStockRepository stockRepo;
+  private final RolePermissionService permissionService;
+  private final SubscriptionService subscriptionService;
 
   public DashboardService(
       SaleRepository saleRepo,
@@ -41,7 +53,9 @@ public class DashboardService {
       ClientRepository clientRepo,
       SupplierRepository supplierRepo,
       ExpenseRepository expenseRepo,
-      ProductStoreStockRepository stockRepo) {
+      ProductStoreStockRepository stockRepo,
+      RolePermissionService permissionService,
+      SubscriptionService subscriptionService) {
     this.saleRepo = saleRepo;
     this.saleLineRepo = saleLineRepo;
     this.productRepo = productRepo;
@@ -50,6 +64,8 @@ public class DashboardService {
     this.supplierRepo = supplierRepo;
     this.expenseRepo = expenseRepo;
     this.stockRepo = stockRepo;
+    this.permissionService = permissionService;
+    this.subscriptionService = subscriptionService;
   }
 
   public DashboardResponse getDashboard(
@@ -163,6 +179,115 @@ public class DashboardService {
         totalStores,
         lowStock,
         recent,
+        topProducts);
+  }
+
+  public GlobalViewResponse getGlobalView(
+      UserPrincipal p, LocalDate periodStart, LocalDate periodEnd) {
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    permissionService.require(p, Permission.GLOBAL_VIEW_READ);
+    subscriptionService
+        .getPlanForBusiness(p.businessId())
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureGlobalView())) {
+                throw new AccessDeniedException(
+                    "Vue globale réservée aux plans Pro et Business. Passez à un plan supérieur.");
+              }
+            });
+    UUID bId = p.businessId();
+    Instant pStart = periodStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
+    Instant pEnd = periodEnd.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+    List<Store> stores = storeRepo.findByBusinessId(bId);
+    Map<UUID, String> storeNames = new HashMap<>();
+    for (Store s : stores) storeNames.put(s.getId(), s.getName());
+
+    List<Sale> periodSales =
+        saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, Pageable.unpaged()).stream()
+            .filter(
+                s ->
+                    s.isCompleted()
+                        && !s.getCreatedAt().isBefore(pStart)
+                        && s.getCreatedAt().isBefore(pEnd))
+            .toList();
+
+    long totalRevenue =
+        periodSales.stream().mapToLong(s -> s.getTotal() != null ? s.getTotal() : 0).sum();
+    long totalSalesCount = periodSales.size();
+    double averageBasket = totalSalesCount > 0 ? (double) totalRevenue / totalSalesCount : 0;
+    long totalExpenses =
+        expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, periodStart, periodEnd);
+    long totalProfit = totalRevenue - totalExpenses;
+
+    List<Object[]> storeRows =
+        saleRepo.sumRevenueAndCountByStoreIdBetween(bId, pStart, pEnd);
+    List<GlobalViewResponse.StoreStats> salesByStore = new ArrayList<>();
+    for (Object[] row : storeRows) {
+      UUID storeId = (UUID) row[0];
+      long revenue = row[1] instanceof Number n ? n.longValue() : 0L;
+      long count = row[2] instanceof Number n ? n.longValue() : 0L;
+      double sharePercent = totalRevenue > 0 ? (100.0 * revenue / totalRevenue) : 0;
+      salesByStore.add(
+          new GlobalViewResponse.StoreStats(
+              storeId,
+              storeNames.getOrDefault(storeId, "Boutique"),
+              revenue,
+              count,
+              Math.round(sharePercent * 10) / 10.0));
+    }
+    salesByStore.sort((a, b) -> Long.compare(b.revenue(), a.revenue()));
+
+    List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
+    for (Store store : stores) {
+      for (ProductStoreStock s : stockRepo.findByStoreId(store.getId())) {
+        if (s.isLowStock()) {
+          Product pr = productRepo.findById(s.getProductId()).orElse(null);
+          lowStock.add(
+              new DashboardResponse.LowStockItem(
+                  s.getProductId(),
+                  pr != null ? pr.getName() : "Unknown",
+                  store.getName(),
+                  s.getQuantity(),
+                  s.getMinStock()));
+        }
+      }
+    }
+
+    Map<UUID, long[]> productStats = new HashMap<>();
+    for (Sale sale : periodSales) {
+      for (SaleLine line : saleLineRepo.findBySaleId(sale.getId())) {
+        productStats.computeIfAbsent(line.getProductId(), k -> new long[] {0, 0});
+        productStats.get(line.getProductId())[0] += line.getQuantity();
+        productStats.get(line.getProductId())[1] += line.getLineTotal();
+      }
+    }
+    List<DashboardResponse.TopProduct> topProducts =
+        productStats.entrySet().stream()
+            .sorted((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]))
+            .limit(10)
+            .map(
+                e -> {
+                  Product pr = productRepo.findById(e.getKey()).orElse(null);
+                  return new DashboardResponse.TopProduct(
+                      e.getKey(),
+                      pr != null ? pr.getName() : "Unknown",
+                      e.getValue()[0],
+                      e.getValue()[1]);
+                })
+            .toList();
+
+    return new GlobalViewResponse(
+        periodStart,
+        periodEnd,
+        totalRevenue,
+        totalSalesCount,
+        averageBasket,
+        totalExpenses,
+        totalProfit,
+        stores.size(),
+        salesByStore,
+        lowStock,
         topProducts);
   }
 }

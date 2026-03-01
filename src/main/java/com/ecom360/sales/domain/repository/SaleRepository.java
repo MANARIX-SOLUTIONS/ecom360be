@@ -29,6 +29,17 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
   List<Object[]> sumTotalByBusinessIdBetween(
       @Param("start") Instant start, @Param("end") Instant end);
 
+  /** Revenue and count per store for a business in date range (completed sales only). */
+  @Query(
+      "SELECT s.storeId, COALESCE(SUM(s.total), 0), COUNT(s) FROM Sale s"
+          + " WHERE s.businessId = :bId AND s.status = 'completed'"
+          + " AND s.createdAt >= :start AND s.createdAt < :end"
+          + " GROUP BY s.storeId")
+  List<Object[]> sumRevenueAndCountByStoreIdBetween(
+      @Param("bId") UUID businessId,
+      @Param("start") Instant start,
+      @Param("end") Instant end);
+
   @Query(
       "SELECT s FROM Sale s WHERE s.businessId = :bId "
           + "AND (:storeId IS NULL OR s.storeId = :storeId) "

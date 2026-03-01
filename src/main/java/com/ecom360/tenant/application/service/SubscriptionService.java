@@ -284,6 +284,7 @@ public class SubscriptionService {
         Boolean.TRUE.equals(plan.getFeatureAccountManager()),
         Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
         Boolean.TRUE.equals(plan.getFeatureDeliveryCouriers()),
+        Boolean.TRUE.equals(plan.getFeatureGlobalView()),
         plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
   }
 

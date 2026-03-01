@@ -64,6 +64,9 @@ public enum Permission {
   STORES_UPDATE,
   STORES_DELETE,
 
+  // Vue globale (toutes les boutiques — plan Pro/Business, rôles propriétaire/gestionnaire)
+  GLOBAL_VIEW_READ,
+
   // Abonnement
   SUBSCRIPTION_READ,
   SUBSCRIPTION_UPDATE,

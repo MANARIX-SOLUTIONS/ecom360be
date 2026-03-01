@@ -34,6 +34,7 @@ public class RolePermissionService {
           Permission.SALES_READ,
           Permission.SALES_UPDATE,
           Permission.SALES_DELETE);
+  // GLOBAL_VIEW_READ : propriétaire et gestionnaire uniquement (pas caissier)
 
   /** Vérifie que l'utilisateur a la permission. Lance AccessDeniedException sinon. */
   public void require(UserPrincipal p, Permission perm) {

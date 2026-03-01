@@ -1,6 +1,7 @@
 package com.ecom360.analytics.infrastructure.web;
 
 import com.ecom360.analytics.application.dto.DashboardResponse;
+import com.ecom360.analytics.application.dto.GlobalViewResponse;
 import com.ecom360.analytics.application.service.DashboardService;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
@@ -35,5 +36,18 @@ public class DashboardController {
     if (periodStart == null) periodStart = LocalDate.now().withDayOfMonth(1);
     if (periodEnd == null) periodEnd = LocalDate.now();
     return ResponseEntity.ok(svc.getDashboard(p, periodStart, periodEnd));
+  }
+
+  @GetMapping("/global")
+  @Operation(summary = "Vue globale de toutes les boutiques")
+  public ResponseEntity<GlobalViewResponse> globalView(
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate periodStart,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate periodEnd,
+      @AuthenticationPrincipal UserPrincipal p) {
+    if (periodStart == null) periodStart = LocalDate.now().withDayOfMonth(1);
+    if (periodEnd == null) periodEnd = LocalDate.now();
+    return ResponseEntity.ok(svc.getGlobalView(p, periodStart, periodEnd));
   }
 }
