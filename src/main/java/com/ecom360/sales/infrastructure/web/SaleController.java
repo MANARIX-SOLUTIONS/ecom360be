@@ -9,9 +9,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -45,14 +49,25 @@ public class SaleController {
   @Operation(summary = "List sales")
   public ResponseEntity<PageResponse<SaleResponse>> list(
       @RequestParam(required = false) UUID storeId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate periodStart,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate periodEnd,
+      @RequestParam(required = false) String status,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @AuthenticationPrincipal UserPrincipal p) {
+    ZoneId zone = ZoneId.systemDefault();
+    Instant from = periodStart != null ? periodStart.atStartOfDay(zone).toInstant() : null;
+    Instant to = periodEnd != null ? periodEnd.plusDays(1).atStartOfDay(zone).toInstant() : null;
     return ResponseEntity.ok(
         PageResponse.of(
             svc.list(
                 p,
                 storeId,
+                from,
+                to,
+                status != null && !status.isBlank() ? status : null,
                 PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending()))));
   }
 

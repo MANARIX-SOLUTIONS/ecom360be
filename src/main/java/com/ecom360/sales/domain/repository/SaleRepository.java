@@ -28,4 +28,19 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
       "SELECT s.businessId, COALESCE(SUM(s.total), 0) FROM Sale s WHERE s.status = 'completed' AND s.createdAt BETWEEN :start AND :end GROUP BY s.businessId")
   List<Object[]> sumTotalByBusinessIdBetween(
       @Param("start") Instant start, @Param("end") Instant end);
+
+  @Query(
+      "SELECT s FROM Sale s WHERE s.businessId = :bId "
+          + "AND (:storeId IS NULL OR s.storeId = :storeId) "
+          + "AND (:status IS NULL OR s.status = :status) "
+          + "AND (CAST(:from AS timestamp) IS NULL OR s.createdAt >= :from) "
+          + "AND (CAST(:to AS timestamp) IS NULL OR s.createdAt < :to) "
+          + "ORDER BY s.createdAt DESC")
+  Page<Sale> findFiltered(
+      @Param("bId") UUID businessId,
+      @Param("storeId") UUID storeId,
+      @Param("status") String status,
+      @Param("from") Instant from,
+      @Param("to") Instant to,
+      Pageable pageable);
 }

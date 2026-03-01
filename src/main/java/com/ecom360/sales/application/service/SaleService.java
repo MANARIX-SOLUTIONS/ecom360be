@@ -153,13 +153,23 @@ public class SaleService {
             .orElseThrow(() -> new ResourceNotFoundException("Sale", id)));
   }
 
-  public Page<SaleResponse> list(UserPrincipal p, UUID storeId, Pageable pg) {
+  public Page<SaleResponse> list(
+      UserPrincipal p,
+      UUID storeId,
+      Instant periodStart,
+      Instant periodEnd,
+      String status,
+      Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_READ);
     Page<Sale> page =
-        storeId != null
-            ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(p.businessId(), storeId, pg)
-            : saleRepo.findByBusinessIdOrderByCreatedAtDesc(p.businessId(), pg);
+        saleRepo.findFiltered(
+            p.businessId(),
+            storeId,
+            status,
+            periodStart,
+            periodEnd,
+            pg);
     return page.map(this::mapSale);
   }
 
