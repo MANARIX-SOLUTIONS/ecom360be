@@ -70,6 +70,11 @@ public class DashboardService {
 
   public DashboardResponse getDashboard(
       UserPrincipal p, LocalDate periodStart, LocalDate periodEnd) {
+    return getDashboard(p, periodStart, periodEnd, null);
+  }
+
+  public DashboardResponse getDashboard(
+      UserPrincipal p, LocalDate periodStart, LocalDate periodEnd, UUID storeId) {
     if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
     UUID bId = p.businessId();
 
@@ -78,13 +83,22 @@ public class DashboardService {
     Instant pStart = periodStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
     Instant pEnd = periodEnd.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
 
-    long todaySalesCount = saleRepo.countByBusinessIdAndCreatedAtBetween(bId, todayStart, todayEnd);
-    long periodSalesCount = saleRepo.countByBusinessIdAndCreatedAtBetween(bId, pStart, pEnd);
+    long todaySalesCount =
+        storeId != null
+            ? saleRepo.countByBusinessIdAndStoreIdAndCreatedAtBetween(bId, storeId, todayStart, todayEnd)
+            : saleRepo.countByBusinessIdAndCreatedAtBetween(bId, todayStart, todayEnd);
+    long periodSalesCount =
+        storeId != null
+            ? saleRepo.countByBusinessIdAndStoreIdAndCreatedAtBetween(bId, storeId, pStart, pEnd)
+            : saleRepo.countByBusinessIdAndCreatedAtBetween(bId, pStart, pEnd);
 
     // Revenue from completed sales
     Pageable all = Pageable.unpaged();
     List<Sale> periodSales =
-        saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, all).stream()
+        (storeId != null
+                ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(bId, storeId, all)
+                : saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, all))
+            .stream()
             .filter(
                 s ->
                     s.isCompleted()
@@ -101,7 +115,10 @@ public class DashboardService {
             .sum();
 
     long periodExpenses =
-        expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, periodStart, periodEnd);
+        storeId != null
+            ? expenseRepo.sumAmountByBusinessIdAndStoreIdAndDateBetween(
+                bId, storeId, periodStart, periodEnd)
+            : expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, periodStart, periodEnd);
     long periodProfit = periodRevenue - periodExpenses;
 
     long totalProducts = productRepo.findByBusinessId(bId, Pageable.unpaged()).getTotalElements();
@@ -109,11 +126,16 @@ public class DashboardService {
         clientRepo.findByBusinessIdAndIsActive(bId, true, Pageable.unpaged()).getTotalElements();
     long totalSuppliers =
         supplierRepo.findByBusinessIdAndIsActive(bId, true, Pageable.unpaged()).getTotalElements();
-    long totalStores = storeRepo.findByBusinessId(bId).size();
+    List<Store> businessStores = storeRepo.findByBusinessId(bId);
+    long totalStores = businessStores.size();
 
-    // Low stock
+    // Low stock: one store when storeId set, else all stores
     List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
-    for (Store store : storeRepo.findByBusinessId(bId)) {
+    List<Store> storesForStock =
+        storeId != null
+            ? businessStores.stream().filter(s -> s.getId().equals(storeId)).toList()
+            : businessStores;
+    for (Store store : storesForStock) {
       for (ProductStoreStock s : stockRepo.findByStoreId(store.getId())) {
         if (s.isLowStock()) {
           Product pr = productRepo.findById(s.getProductId()).orElse(null);
@@ -130,7 +152,10 @@ public class DashboardService {
 
     // Recent sales
     List<DashboardResponse.RecentSale> recent =
-        saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, PageRequest.of(0, 10)).stream()
+        (storeId != null
+                ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(bId, storeId, PageRequest.of(0, 10))
+                : saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, PageRequest.of(0, 10)))
+            .stream()
             .map(
                 s ->
                     new DashboardResponse.RecentSale(

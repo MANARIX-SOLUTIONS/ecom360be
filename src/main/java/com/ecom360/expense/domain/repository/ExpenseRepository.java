@@ -37,5 +37,14 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
       @Param("startDate") LocalDate startDate,
       @Param("endDate") LocalDate endDate);
 
+  @Query(
+      "SELECT COALESCE(SUM(e.amount),0) FROM Expense e WHERE e.businessId=:b AND e.storeId=:storeId"
+          + " AND e.expenseDate BETWEEN :startDate AND :endDate")
+  long sumAmountByBusinessIdAndStoreIdAndDateBetween(
+      @Param("b") UUID b,
+      @Param("storeId") UUID storeId,
+      @Param("startDate") LocalDate startDate,
+      @Param("endDate") LocalDate endDate);
+
   long countByBusinessIdAndCategoryId(UUID businessId, UUID categoryId);
 }

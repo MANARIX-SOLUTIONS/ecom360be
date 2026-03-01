@@ -24,6 +24,9 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
 
   long countByBusinessIdAndCreatedAtBetween(UUID bId, Instant s, Instant e);
 
+  long countByBusinessIdAndStoreIdAndCreatedAtBetween(
+      UUID bId, UUID storeId, Instant start, Instant end);
+
   @Query(
       "SELECT s.businessId, COALESCE(SUM(s.total), 0) FROM Sale s WHERE s.status = 'completed' AND s.createdAt BETWEEN :start AND :end GROUP BY s.businessId")
   List<Object[]> sumTotalByBusinessIdBetween(

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
+import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,16 +27,17 @@ public class DashboardController {
   }
 
   @GetMapping
-  @Operation(summary = "Get dashboard data")
+  @Operation(summary = "Get dashboard data (optionally scoped to one store)")
   public ResponseEntity<DashboardResponse> dashboard(
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate periodStart,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate periodEnd,
+      @RequestParam(required = false) UUID storeId,
       @AuthenticationPrincipal UserPrincipal p) {
     if (periodStart == null) periodStart = LocalDate.now().withDayOfMonth(1);
     if (periodEnd == null) periodEnd = LocalDate.now();
-    return ResponseEntity.ok(svc.getDashboard(p, periodStart, periodEnd));
+    return ResponseEntity.ok(svc.getDashboard(p, periodStart, periodEnd, storeId));
   }
 
   @GetMapping("/global")
