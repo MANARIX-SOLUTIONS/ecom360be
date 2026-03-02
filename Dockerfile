@@ -3,7 +3,7 @@
 # ──────────────────────────────────────────────────────────────
 
 # Stage 1: Build
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 WORKDIR /app
 COPY gradle/ gradle/
 COPY gradlew build.gradle.kts settings.gradle.kts ./
@@ -12,7 +12,7 @@ COPY src/ src/
 RUN ./gradlew bootJar --no-daemon -x test
 
 # Stage 2: Runtime
-FROM eclipse-temurin:17-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 
 RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 
