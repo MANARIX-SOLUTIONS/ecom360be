@@ -13,7 +13,8 @@ public record ProductRequest(
     @Size(max = 50) String unit,
     @Size(max = 500) String imageUrl,
     UUID categoryId,
-    @NotNull Boolean isActive) {
+    @NotNull Boolean isActive,
+    @NotNull UUID storeId) {
   public ProductRequest {
     if (unit == null || unit.isBlank()) unit = "pièce";
     if (isActive == null) isActive = true;

@@ -9,6 +9,8 @@ import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
+import com.ecom360.store.domain.model.Store;
+import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.Map;
 import java.util.UUID;
@@ -24,18 +26,21 @@ public class ProductService {
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
   private final AuditLogService auditLogService;
+  private final StoreRepository storeRepository;
 
   public ProductService(
       ProductRepository productRepo,
       CategoryRepository categoryRepo,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService,
-      AuditLogService auditLogService) {
+      AuditLogService auditLogService,
+      StoreRepository storeRepository) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
     this.auditLogService = auditLogService;
+    this.storeRepository = storeRepository;
   }
 
   public ProductResponse create(ProductRequest r, UserPrincipal p) {
@@ -63,8 +68,14 @@ public class ProductService {
         && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
             .noneMatch(c -> c.getId().equals(r.categoryId())))
       throw new ResourceNotFoundException("Category", r.categoryId());
+    Store store =
+        storeRepository
+            .findById(r.storeId())
+            .filter(s -> s.belongsTo(p.businessId()))
+            .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
     Product prod = new Product();
     prod.setBusinessId(p.businessId());
+    prod.setStoreId(store.getId());
     applyFields(prod, r);
     Product saved = productRepo.save(prod);
     auditLogService.logAsync(
@@ -83,13 +94,28 @@ public class ProductService {
     return map(find(id, p));
   }
 
-  public Page<ProductResponse> list(UserPrincipal p, Pageable pg, String search) {
+  public Page<ProductResponse> list(UserPrincipal p, Pageable pg, String search, UUID storeId) {
     requireBiz(p);
     permissionService.require(p, Permission.PRODUCTS_READ);
-    Page<Product> page =
-        (search != null && !search.isBlank())
-            ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
-            : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
+    Page<Product> page;
+    if (storeId != null) {
+      Store store =
+          storeRepository
+              .findById(storeId)
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+      page =
+          (search != null && !search.isBlank())
+              ? productRepo.searchByBusinessIdAndStoreId(
+                  p.businessId(), store.getId(), search.trim(), pg)
+              : productRepo.findByBusinessIdAndStoreIdAndIsActive(
+                  p.businessId(), store.getId(), true, pg);
+    } else {
+      page =
+          (search != null && !search.isBlank())
+              ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
+              : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
+    }
     return page.map(this::map);
   }
 
@@ -107,6 +133,14 @@ public class ProductService {
         && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
             .noneMatch(c -> c.getId().equals(r.categoryId())))
       throw new ResourceNotFoundException("Category", r.categoryId());
+    if (r.storeId() != null && !r.storeId().equals(prod.getStoreId())) {
+      Store store =
+          storeRepository
+              .findById(r.storeId())
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+      prod.setStoreId(store.getId());
+    }
     applyFields(prod, r);
     Product saved = productRepo.save(prod);
     auditLogService.logAsync(
@@ -172,6 +206,7 @@ public class ProductService {
         p.getImageUrl(),
         p.getIsActive(),
         p.getCreatedAt(),
-        p.getUpdatedAt());
+        p.getUpdatedAt(),
+        p.getStoreId());
   }
 }

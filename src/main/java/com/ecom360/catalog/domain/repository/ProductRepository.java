@@ -32,4 +32,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
   long countByBusinessIdAndCategoryIdAndIsActive(
       UUID businessId, UUID categoryId, Boolean isActive);
+
+  Page<Product> findByBusinessIdAndStoreIdAndIsActive(
+      UUID businessId, UUID storeId, Boolean isActive, Pageable pageable);
+
+  @Query(
+      "SELECT p FROM Product p WHERE p.businessId = :bid AND p.storeId = :sid AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))")
+  Page<Product> searchByBusinessIdAndStoreId(
+      @Param("bid") UUID bid,
+      @Param("sid") UUID storeId,
+      @Param("s") String s,
+      Pageable pageable);
 }

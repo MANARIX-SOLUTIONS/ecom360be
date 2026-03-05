@@ -17,4 +17,5 @@ public record ProductResponse(
     String imageUrl,
     Boolean isActive,
     Instant createdAt,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    UUID storeId) {}

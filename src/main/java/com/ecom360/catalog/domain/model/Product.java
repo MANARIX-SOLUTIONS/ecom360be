@@ -10,6 +10,9 @@ public class Product extends BaseEntity {
   @Column(name = "business_id", nullable = false)
   private UUID businessId;
 
+  @Column(name = "store_id", nullable = false)
+  private UUID storeId;
+
   @Column(name = "category_id")
   private UUID categoryId;
 
@@ -41,12 +44,24 @@ public class Product extends BaseEntity {
     return businessId.equals(bizId);
   }
 
+  public boolean belongsToStore(UUID storeId) {
+    return this.storeId.equals(storeId);
+  }
+
   public UUID getBusinessId() {
     return businessId;
   }
 
   public void setBusinessId(UUID v) {
     this.businessId = v;
+  }
+
+  public UUID getStoreId() {
+    return storeId;
+  }
+
+  public void setStoreId(UUID v) {
+    this.storeId = v;
   }
 
   public UUID getCategoryId() {
