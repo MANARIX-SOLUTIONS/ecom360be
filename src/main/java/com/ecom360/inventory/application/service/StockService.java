@@ -233,7 +233,9 @@ public class StockService {
         s.getQuantity(),
         s.getMinStock(),
         s.isLowStock(),
-        s.getUpdatedAt());
+        s.getUpdatedAt(),
+        pr != null ? pr.getSalePrice() : null,
+        pr != null ? pr.getCategoryId() : null);
   }
 
   private StockMovementResponse mapMov(StockMovement m) {

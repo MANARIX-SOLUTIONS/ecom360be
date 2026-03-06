@@ -12,4 +12,6 @@ public record StockLevelResponse(
     Integer quantity,
     Integer minStock,
     Boolean lowStock,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    Integer salePrice,
+    UUID categoryId) {}
