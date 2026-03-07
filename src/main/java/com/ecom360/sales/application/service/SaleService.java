@@ -136,7 +136,10 @@ public class SaleService {
       sale.setChangeGiven(Math.max(0, req.amountReceived() - sale.getTotal()));
     }
     if (sale.isCreditSale()) {
-      Client c = clientRepo.findByBusinessIdAndId(p.businessId(), req.clientId()).orElseThrow();
+      Client c =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), req.clientId())
+              .orElseThrow(() -> new ResourceNotFoundException("Client", req.clientId()));
       c.addCredit(sale.getTotal());
       clientRepo.save(c);
     }
@@ -192,7 +195,10 @@ public class SaleService {
           line.getQuantity(),
           "VOID-" + sale.getReceiptNumber());
     if (sale.isCreditSale()) {
-      Client c = clientRepo.findByBusinessIdAndId(p.businessId(), sale.getClientId()).orElseThrow();
+      Client c =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), sale.getClientId())
+              .orElseThrow(() -> new ResourceNotFoundException("Client", sale.getClientId()));
       c.deductCredit(sale.getTotal());
       clientRepo.save(c);
     }

@@ -127,6 +127,8 @@ public class StockService {
   public StockLevelResponse getStockLevel(UUID productId, UUID storeId, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.STOCK_READ);
+    verifyProduct(productId, p.businessId());
+    verifyStore(storeId, p.businessId());
     return mapLevel(
         stockRepo
             .findByProductIdAndStoreId(productId, storeId)
@@ -137,6 +139,8 @@ public class StockService {
       UUID productId, UUID storeId, UserPrincipal p, Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.STOCK_READ);
+    verifyProduct(productId, p.businessId());
+    verifyStore(storeId, p.businessId());
     return movementRepo
         .findByProductIdAndStoreIdOrderByCreatedAtDesc(productId, storeId, pg)
         .map(this::mapMov);
@@ -166,6 +170,10 @@ public class StockService {
                   return stockRepo.save(n);
                 });
     int before = s.getQuantity();
+    if (before - qty < 0) {
+      throw new BusinessRuleException(
+          "Stock insuffisant pour ce produit (disponible: " + before + ", demandé: " + qty + ")");
+    }
     s.adjustQuantity(-qty);
     stockRepo.save(s);
     movementRepo.save(

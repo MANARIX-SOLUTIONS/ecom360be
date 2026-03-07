@@ -130,7 +130,10 @@ public class PurchaseOrderService {
             line.getQuantity(),
             po.getReference());
       Supplier sup =
-          supplierRepo.findByBusinessIdAndId(p.businessId(), po.getSupplierId()).orElseThrow();
+          supplierRepo
+              .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
+              .orElseThrow(
+                  () -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
       sup.addToBalance(po.getTotalAmount());
       supplierRepo.save(sup);
     }
