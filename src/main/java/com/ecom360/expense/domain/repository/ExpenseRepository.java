@@ -47,4 +47,13 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
       @Param("endDate") LocalDate endDate);
 
   long countByBusinessIdAndCategoryId(UUID businessId, UUID categoryId);
+
+  Page<Expense> findByBusinessIdAndExpenseDateGreaterThanEqualOrderByExpenseDateDesc(
+      UUID bId, LocalDate minDate, Pageable p);
+
+  Page<Expense> findByBusinessIdAndCategoryIdAndExpenseDateGreaterThanEqualOrderByExpenseDateDesc(
+      UUID bId, UUID cId, LocalDate minDate, Pageable p);
+
+  Page<Expense> findByBusinessIdAndStoreIdAndExpenseDateGreaterThanEqualOrderByExpenseDateDesc(
+      UUID bId, UUID sId, LocalDate minDate, Pageable p);
 }

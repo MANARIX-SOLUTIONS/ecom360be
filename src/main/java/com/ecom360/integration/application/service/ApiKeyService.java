@@ -8,6 +8,7 @@ import com.ecom360.integration.application.dto.ApiKeyResponse;
 import com.ecom360.integration.domain.model.ApiKey;
 import com.ecom360.integration.domain.repository.ApiKeyRepository;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
+import com.ecom360.tenant.application.service.SubscriptionService;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -26,15 +27,25 @@ public class ApiKeyService {
 
   private final ApiKeyRepository apiKeyRepository;
   private final RolePermissionService permissionService;
+  private final SubscriptionService subscriptionService;
 
-  public ApiKeyService(ApiKeyRepository apiKeyRepository, RolePermissionService permissionService) {
+  public ApiKeyService(
+      ApiKeyRepository apiKeyRepository,
+      RolePermissionService permissionService,
+      SubscriptionService subscriptionService) {
     this.apiKeyRepository = apiKeyRepository;
     this.permissionService = permissionService;
+    this.subscriptionService = subscriptionService;
+  }
+
+  private void requireApi(UserPrincipal p) {
+    subscriptionService.requireFeatureApi(p.businessId());
   }
 
   @Transactional
   public ApiKeyResponse create(ApiKeyRequest request, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.API_KEYS_CREATE);
     String rawKey = generateRawKey();
     String keyHash = hashKey(rawKey);
@@ -61,6 +72,7 @@ public class ApiKeyService {
 
   public List<ApiKeyResponse> list(UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.API_KEYS_READ);
     return apiKeyRepository.findByBusinessId(p.businessId()).stream()
         .map(this::toResponse)
@@ -69,6 +81,7 @@ public class ApiKeyService {
 
   public ApiKeyResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.API_KEYS_READ);
     return toResponse(find(id, p));
   }
@@ -76,6 +89,7 @@ public class ApiKeyService {
   @Transactional
   public void revoke(UUID id, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.API_KEYS_DELETE);
     ApiKey apiKey = find(id, p);
     apiKey.setIsActive(false);

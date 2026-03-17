@@ -17,6 +17,7 @@ import com.ecom360.tenant.domain.repository.PlanRepository;
 import com.ecom360.tenant.domain.repository.SubscriptionRepository;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -126,6 +127,75 @@ public class SubscriptionService {
             businessId, SubscriptionStatus.ACCESS_GRANTING)
         .filter(this::notExpiredOrExpireLazy)
         .flatMap(sub -> planRepository.findById(sub.getPlanId()));
+  }
+
+  public LocalDate clampPeriodStartToRetention(UUID businessId, LocalDate periodStart) {
+    return getPlanForBusiness(businessId)
+        .map(
+            plan -> {
+              int m = plan.getDataRetentionMonths() == null ? 0 : plan.getDataRetentionMonths();
+              if (m <= 0) return periodStart;
+              LocalDate min = LocalDate.now(ZoneId.systemDefault()).minusMonths(m);
+              return periodStart.isBefore(min) ? min : periodStart;
+            })
+        .orElse(periodStart);
+  }
+
+  /** True if instant is strictly before the plan's retained history window. */
+  public boolean isBeforeDataRetention(UUID businessId, Instant at) {
+    Optional<Plan> opt = getPlanForBusiness(businessId);
+    if (opt.isEmpty()) return false;
+    int m = opt.get().getDataRetentionMonths() == null ? 0 : opt.get().getDataRetentionMonths();
+    if (m <= 0) return false;
+    LocalDate min = LocalDate.now(ZoneId.systemDefault()).minusMonths(m);
+    return at.isBefore(min.atStartOfDay(ZoneId.systemDefault()).toInstant());
+  }
+
+  public Instant clampSaleHistoryFrom(UUID businessId, Instant requestedFrom) {
+    Optional<Plan> opt = getPlanForBusiness(businessId);
+    if (opt.isEmpty()) return requestedFrom;
+    int m = opt.get().getDataRetentionMonths() == null ? 0 : opt.get().getDataRetentionMonths();
+    if (m <= 0) return requestedFrom;
+    Instant minI =
+        LocalDate.now(ZoneId.systemDefault())
+            .minusMonths(m)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant();
+    if (requestedFrom == null || requestedFrom.isBefore(minI)) return minI;
+    return requestedFrom;
+  }
+
+  public void requireFeatureReports(UUID businessId) {
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureReports())) {
+                throw new AccessDeniedException(
+                    "Rapports et analyses non inclus dans le plan Starter. Passez au plan Pro.");
+              }
+            });
+  }
+
+  public void requireFeatureApi(UUID businessId) {
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureApi())) {
+                throw new AccessDeniedException(
+                    "API, clés d'accès et webhooks sont réservés au plan Business.");
+              }
+            });
+  }
+
+  public void requireSupplierTracking(UUID businessId) {
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureSupplierTracking())) {
+                throw new AccessDeniedException(
+                    "Commandes et suivi fournisseurs avancé non inclus dans votre plan. Passez au plan Pro.");
+              }
+            });
   }
 
   /**

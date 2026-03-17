@@ -150,10 +150,14 @@ public class SaleService {
   public SaleResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_READ);
-    return mapSale(
+    Sale sale =
         saleRepo
             .findByBusinessIdAndId(p.businessId(), id)
-            .orElseThrow(() -> new ResourceNotFoundException("Sale", id)));
+            .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
+    if (subscriptionService.isBeforeDataRetention(p.businessId(), sale.getCreatedAt())) {
+      throw new ResourceNotFoundException("Sale", id);
+    }
+    return mapSale(sale);
   }
 
   public Page<SaleResponse> list(
@@ -165,14 +169,9 @@ public class SaleService {
       Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_READ);
+    Instant from = subscriptionService.clampSaleHistoryFrom(p.businessId(), periodStart);
     Page<Sale> page =
-        saleRepo.findFiltered(
-            p.businessId(),
-            storeId,
-            status,
-            periodStart,
-            periodEnd,
-            pg);
+        saleRepo.findFiltered(p.businessId(), storeId, status, from, periodEnd, pg);
     return page.map(this::mapSale);
   }
 
@@ -184,6 +183,10 @@ public class SaleService {
         saleRepo
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
+    if (subscriptionService.isBeforeDataRetention(p.businessId(), sale.getCreatedAt())) {
+      throw new BusinessRuleException(
+          "Cette vente est hors de la période d'historique de votre plan.");
+    }
     if (!sale.isCompleted()) throw new BusinessRuleException("Only completed sales can be voided");
     sale.markVoided();
     List<SaleLine> lines = lineRepo.findBySaleId(sale.getId());

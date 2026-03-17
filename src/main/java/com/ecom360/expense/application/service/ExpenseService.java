@@ -10,6 +10,7 @@ import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -131,12 +132,19 @@ public class ExpenseService {
       Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.EXPENSES_READ);
+    LocalDate rmin = expenseRetentionMin(p);
     LocalDate startDate = null;
     LocalDate endDate = null;
     if (month != null && year != null && month >= 1 && month <= 12) {
       YearMonth ym = YearMonth.of(year, month);
       startDate = ym.atDay(1);
       endDate = ym.atEndOfMonth();
+    }
+    if (rmin != null && startDate != null && startDate.isBefore(rmin)) {
+      startDate = rmin;
+    }
+    if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+      return Page.empty(pg);
     }
     if (startDate != null && endDate != null) {
       if (categoryId != null)
@@ -154,6 +162,22 @@ public class ExpenseService {
               p.businessId(), startDate, endDate, pg)
           .map(this::mapExp);
     }
+    if (rmin != null) {
+      if (categoryId != null)
+        return expenseRepo
+            .findByBusinessIdAndCategoryIdAndExpenseDateGreaterThanEqualOrderByExpenseDateDesc(
+                p.businessId(), categoryId, rmin, pg)
+            .map(this::mapExp);
+      if (storeId != null)
+        return expenseRepo
+            .findByBusinessIdAndStoreIdAndExpenseDateGreaterThanEqualOrderByExpenseDateDesc(
+                p.businessId(), storeId, rmin, pg)
+            .map(this::mapExp);
+      return expenseRepo
+          .findByBusinessIdAndExpenseDateGreaterThanEqualOrderByExpenseDateDesc(
+              p.businessId(), rmin, pg)
+          .map(this::mapExp);
+    }
     if (categoryId != null)
       return expenseRepo
           .findByBusinessIdAndCategoryIdOrderByExpenseDateDesc(p.businessId(), categoryId, pg)
@@ -168,10 +192,12 @@ public class ExpenseService {
   public ExpenseResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.EXPENSES_READ);
-    return mapExp(
+    Expense e =
         expenseRepo
             .findByBusinessIdAndId(p.businessId(), id)
-            .orElseThrow(() -> new ResourceNotFoundException("Expense", id)));
+            .orElseThrow(() -> new ResourceNotFoundException("Expense", id));
+    assertExpenseInRetention(p, e);
+    return mapExp(e);
   }
 
   public ExpenseResponse update(UUID id, ExpenseRequest r, UserPrincipal p) {
@@ -181,6 +207,7 @@ public class ExpenseService {
         expenseRepo
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Expense", id));
+    assertExpenseInRetention(p, e);
     e.setStoreId(r.storeId());
     e.setCategoryId(r.categoryId());
     e.setAmount(r.amount());
@@ -193,10 +220,29 @@ public class ExpenseService {
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.EXPENSES_DELETE);
-    expenseRepo.delete(
+    Expense e =
         expenseRepo
             .findByBusinessIdAndId(p.businessId(), id)
-            .orElseThrow(() -> new ResourceNotFoundException("Expense", id)));
+            .orElseThrow(() -> new ResourceNotFoundException("Expense", id));
+    assertExpenseInRetention(p, e);
+    expenseRepo.delete(e);
+  }
+
+  private LocalDate expenseRetentionMin(UserPrincipal p) {
+    return subscriptionService
+        .getPlanForBusiness(p.businessId())
+        .filter(pl -> pl.getDataRetentionMonths() != null && pl.getDataRetentionMonths() > 0)
+        .map(
+            pl ->
+                LocalDate.now(ZoneId.systemDefault()).minusMonths(pl.getDataRetentionMonths()))
+        .orElse(null);
+  }
+
+  private void assertExpenseInRetention(UserPrincipal p, Expense e) {
+    LocalDate rmin = expenseRetentionMin(p);
+    if (rmin != null && e.getExpenseDate() != null && e.getExpenseDate().isBefore(rmin)) {
+      throw new ResourceNotFoundException("Expense", e.getId());
+    }
   }
 
   private void requireBiz(UserPrincipal p) {

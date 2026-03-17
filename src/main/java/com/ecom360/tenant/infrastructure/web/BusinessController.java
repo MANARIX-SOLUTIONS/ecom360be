@@ -2,6 +2,7 @@ package com.ecom360.tenant.infrastructure.web;
 
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
+import com.ecom360.tenant.application.dto.BusinessLogoRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileResponse;
 import com.ecom360.tenant.application.service.BusinessProfileService;
@@ -36,5 +37,12 @@ public class BusinessController {
   public ResponseEntity<BusinessProfileResponse> updateMe(
       @Valid @RequestBody BusinessProfileRequest req, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(businessProfileService.update(req, p));
+  }
+
+  @PatchMapping("/me/logo")
+  @Operation(summary = "Mettre à jour le logo (plan Business si URL non vide)")
+  public ResponseEntity<BusinessProfileResponse> updateLogo(
+      @Valid @RequestBody BusinessLogoRequest req, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(businessProfileService.updateLogo(req, p));
   }
 }

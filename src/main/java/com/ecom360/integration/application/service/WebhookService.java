@@ -9,6 +9,7 @@ import com.ecom360.integration.application.dto.WebhookResponse;
 import com.ecom360.integration.domain.model.Webhook;
 import com.ecom360.integration.domain.repository.WebhookRepository;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
+import com.ecom360.tenant.application.service.SubscriptionService;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -25,16 +26,25 @@ public class WebhookService {
 
   private final WebhookRepository webhookRepository;
   private final RolePermissionService permissionService;
+  private final SubscriptionService subscriptionService;
 
   public WebhookService(
-      WebhookRepository webhookRepository, RolePermissionService permissionService) {
+      WebhookRepository webhookRepository,
+      RolePermissionService permissionService,
+      SubscriptionService subscriptionService) {
     this.webhookRepository = webhookRepository;
     this.permissionService = permissionService;
+    this.subscriptionService = subscriptionService;
+  }
+
+  private void requireApi(UserPrincipal p) {
+    subscriptionService.requireFeatureApi(p.businessId());
   }
 
   @Transactional
   public WebhookCreateResponse create(WebhookRequest request, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.WEBHOOKS_CREATE);
     String secret = generateSecret();
     String secretHash = hashSecret(secret);
@@ -60,6 +70,7 @@ public class WebhookService {
 
   public List<WebhookResponse> list(UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.WEBHOOKS_READ);
     return webhookRepository.findByBusinessId(p.businessId()).stream()
         .map(this::toResponse)
@@ -68,6 +79,7 @@ public class WebhookService {
 
   public WebhookResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.WEBHOOKS_READ);
     return toResponse(find(id, p));
   }
@@ -75,6 +87,7 @@ public class WebhookService {
   @Transactional
   public WebhookResponse update(UUID id, WebhookRequest request, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.WEBHOOKS_UPDATE);
     Webhook webhook = find(id, p);
     webhook.setUrl(request.url());
@@ -87,6 +100,7 @@ public class WebhookService {
   @Transactional
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
+    requireApi(p);
     permissionService.require(p, Permission.WEBHOOKS_DELETE);
     webhookRepository.delete(find(id, p));
   }

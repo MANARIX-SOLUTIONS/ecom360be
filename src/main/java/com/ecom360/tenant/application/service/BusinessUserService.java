@@ -109,6 +109,14 @@ public class BusinessUserService {
                           + " utilisateur(s). Passez à un plan supérieur.");
                 }
               }
+              if (!Boolean.TRUE.equals(plan.getFeatureRoleManagement())) {
+                String r = req.role() != null ? req.role().toLowerCase().trim() : "";
+                if (!"caissier".equals(r)) {
+                  throw new BusinessRuleException(
+                      "Sur votre plan, seuls les comptes Caissier peuvent être invités. "
+                          + "Passez au plan Business pour inviter des gestionnaires.");
+                }
+              }
             });
     User user = userRepository.findByEmail(req.email()).orElse(null);
     if (user == null) {

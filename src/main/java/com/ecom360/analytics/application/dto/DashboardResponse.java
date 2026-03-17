@@ -16,7 +16,10 @@ public record DashboardResponse(
     long totalStores,
     List<LowStockItem> lowStockItems,
     List<RecentSale> recentSales,
-    List<TopProduct> topProducts) {
+    List<TopProduct> topProducts,
+    boolean analyticsLimitedToToday,
+    Long periodGrossMargin,
+    List<TopMarginProduct> topMarginProducts) {
   public record LowStockItem(
       UUID productId, String productName, String storeName, int quantity, int minStock) {}
 
@@ -30,4 +33,6 @@ public record DashboardResponse(
 
   public record TopProduct(
       UUID productId, String productName, long totalQuantity, long totalRevenue) {}
+
+  public record TopMarginProduct(UUID productId, String productName, long marginAmount) {}
 }

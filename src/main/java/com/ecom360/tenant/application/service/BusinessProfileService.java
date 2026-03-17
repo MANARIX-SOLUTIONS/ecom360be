@@ -4,6 +4,7 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.ResourceAlreadyExistsException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
+import com.ecom360.tenant.application.dto.BusinessLogoRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileResponse;
 import com.ecom360.tenant.domain.model.Business;
@@ -16,15 +17,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class BusinessProfileService {
 
   private final BusinessRepository businessRepository;
+  private final SubscriptionService subscriptionService;
 
-  public BusinessProfileService(BusinessRepository businessRepository) {
+  public BusinessProfileService(
+      BusinessRepository businessRepository, SubscriptionService subscriptionService) {
     this.businessRepository = businessRepository;
+    this.subscriptionService = subscriptionService;
   }
 
   public BusinessProfileResponse get(UserPrincipal p) {
     Business b = findBusiness(p);
     return new BusinessProfileResponse(
-        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress());
+        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
   }
 
   @Transactional
@@ -50,7 +54,34 @@ public class BusinessProfileService {
     b.setAddress(req.address());
     b = businessRepository.save(b);
     return new BusinessProfileResponse(
-        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress());
+        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
+  }
+
+  @Transactional
+  public BusinessProfileResponse updateLogo(BusinessLogoRequest req, UserPrincipal p) {
+    String role = p.role() != null ? p.role() : "";
+    if (!"proprietaire".equalsIgnoreCase(role) && !p.isPlatformAdmin()) {
+      throw new AccessDeniedException("Seul le rôle propriétaire peut modifier le logo");
+    }
+    Business b = findBusiness(p);
+    String nl = req.logoUrl() != null ? req.logoUrl().trim() : "";
+    if (nl.isEmpty()) {
+      b.setLogoUrl(null);
+    } else {
+      subscriptionService
+          .getPlanForBusiness(p.businessId())
+          .ifPresent(
+              plan -> {
+                if (!Boolean.TRUE.equals(plan.getFeatureCustomBranding())) {
+                  throw new AccessDeniedException(
+                      "Personnalisation (logo) réservée au plan Business.");
+                }
+              });
+      b.setLogoUrl(nl);
+    }
+    b = businessRepository.save(b);
+    return new BusinessProfileResponse(
+        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
   }
 
   private Business findBusiness(UserPrincipal p) {

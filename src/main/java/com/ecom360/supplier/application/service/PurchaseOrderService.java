@@ -7,6 +7,7 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.service.StockService;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.repository.StoreRepository;
+import com.ecom360.tenant.application.service.SubscriptionService;
 import com.ecom360.supplier.application.dto.*;
 import com.ecom360.supplier.domain.model.*;
 import com.ecom360.supplier.domain.repository.*;
@@ -26,6 +27,7 @@ public class PurchaseOrderService {
   private final StoreRepository storeRepo;
   private final StockService stockService;
   private final RolePermissionService permissionService;
+  private final SubscriptionService subscriptionService;
 
   public PurchaseOrderService(
       PurchaseOrderRepository poRepo,
@@ -34,7 +36,8 @@ public class PurchaseOrderService {
       ProductRepository productRepo,
       StoreRepository storeRepo,
       StockService stockService,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      SubscriptionService subscriptionService) {
     this.poRepo = poRepo;
     this.lineRepo = lineRepo;
     this.supplierRepo = supplierRepo;
@@ -42,11 +45,17 @@ public class PurchaseOrderService {
     this.storeRepo = storeRepo;
     this.stockService = stockService;
     this.permissionService = permissionService;
+    this.subscriptionService = subscriptionService;
+  }
+
+  private void requireSupplierTracking(UserPrincipal p) {
+    subscriptionService.requireSupplierTracking(p.businessId());
   }
 
   @Transactional
   public PurchaseOrderResponse create(PurchaseOrderRequest r, UserPrincipal p) {
     requireBiz(p);
+    requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_CREATE);
     supplierRepo
         .findByBusinessIdAndId(p.businessId(), r.supplierId())
@@ -89,6 +98,7 @@ public class PurchaseOrderService {
 
   public PurchaseOrderResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
+    requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
     return mapPO(
         poRepo
@@ -99,6 +109,7 @@ public class PurchaseOrderService {
   public Page<PurchaseOrderResponse> list(
       UserPrincipal p, String status, UUID supplierId, Pageable pg) {
     requireBiz(p);
+    requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
     if (status != null)
       return poRepo
@@ -114,6 +125,7 @@ public class PurchaseOrderService {
   @Transactional
   public PurchaseOrderResponse updateStatus(UUID id, String newStatus, UserPrincipal p) {
     requireBiz(p);
+    requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
     PurchaseOrder po =
         poRepo
