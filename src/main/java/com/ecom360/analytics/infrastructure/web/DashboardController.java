@@ -1,6 +1,7 @@
 package com.ecom360.analytics.infrastructure.web;
 
 import com.ecom360.analytics.application.dto.DashboardResponse;
+import com.ecom360.analytics.application.dto.DashboardSliceResponse;
 import com.ecom360.analytics.application.dto.GlobalViewResponse;
 import com.ecom360.analytics.application.service.DashboardService;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
@@ -38,6 +39,32 @@ public class DashboardController {
     if (periodStart == null) periodStart = LocalDate.now().withDayOfMonth(1);
     if (periodEnd == null) periodEnd = LocalDate.now();
     return ResponseEntity.ok(svc.getDashboard(p, periodStart, periodEnd, storeId));
+  }
+
+  @GetMapping("/top-products")
+  @Operation(summary = "Produits les plus vendus sur la période (par lots)")
+  public ResponseEntity<DashboardSliceResponse<DashboardResponse.TopProduct>> topProductsSlice(
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate periodStart,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate periodEnd,
+      @RequestParam(required = false) UUID storeId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @AuthenticationPrincipal UserPrincipal p) {
+    if (periodStart == null) periodStart = LocalDate.now().withDayOfMonth(1);
+    if (periodEnd == null) periodEnd = LocalDate.now();
+    return ResponseEntity.ok(svc.sliceTopProducts(p, periodStart, periodEnd, storeId, page, size));
+  }
+
+  @GetMapping("/low-stock-items")
+  @Operation(summary = "Produits en stock faible (par lots)")
+  public ResponseEntity<DashboardSliceResponse<DashboardResponse.LowStockItem>> lowStockSlice(
+      @RequestParam(required = false) UUID storeId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(svc.sliceLowStockItems(p, storeId, page, size));
   }
 
   @GetMapping("/global")

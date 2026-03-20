@@ -59,6 +59,10 @@ public class SaleService {
   public SaleResponse createSale(SaleRequest req, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_CREATE);
+    if ("credit".equals(req.paymentMethod())) {
+      throw new BusinessRuleException(
+          "Les ventes à crédit client ne sont pas disponibles au point de vente.");
+    }
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
@@ -77,20 +81,12 @@ public class SaleService {
                           + " ventes/mois. Passez à un plan supérieur.");
                 }
               }
-              if ("credit".equals(req.paymentMethod())
-                  && !Boolean.TRUE.equals(plan.getFeatureClientCredits())) {
-                throw new BusinessRuleException(
-                    "Ventes à crédit non incluses dans votre plan. Passez à un plan supérieur.");
-              }
               if (("wave".equals(req.paymentMethod()) || "orange_money".equals(req.paymentMethod()))
                   && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
                 throw new BusinessRuleException(
                     "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
               }
             });
-    if ("credit".equals(req.paymentMethod()) && req.clientId() == null) {
-      throw new BusinessRuleException("Client is required for credit sales");
-    }
     storeRepo
         .findById(req.storeId())
         .filter(s -> s.belongsTo(p.businessId()))

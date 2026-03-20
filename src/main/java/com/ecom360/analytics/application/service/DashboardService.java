@@ -1,6 +1,7 @@
 package com.ecom360.analytics.application.service;
 
 import com.ecom360.analytics.application.dto.DashboardResponse;
+import com.ecom360.analytics.application.dto.DashboardSliceResponse;
 import com.ecom360.analytics.application.dto.GlobalViewResponse;
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.ProductRepository;
@@ -20,11 +21,14 @@ import com.ecom360.store.domain.model.Store;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.supplier.domain.repository.SupplierRepository;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import com.ecom360.tenant.domain.model.Business;
 import com.ecom360.tenant.domain.model.Plan;
+import com.ecom360.tenant.domain.repository.BusinessRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +40,10 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class DashboardService {
+
+  private static final int DASHBOARD_LIST_PREVIEW = 10;
+  private static final int SLICE_MAX_SIZE = 50;
+
   private final SaleRepository saleRepo;
   private final SaleLineRepository saleLineRepo;
   private final ProductRepository productRepo;
@@ -46,6 +54,7 @@ public class DashboardService {
   private final ProductStoreStockRepository stockRepo;
   private final RolePermissionService permissionService;
   private final SubscriptionService subscriptionService;
+  private final BusinessRepository businessRepo;
 
   public DashboardService(
       SaleRepository saleRepo,
@@ -57,7 +66,8 @@ public class DashboardService {
       ExpenseRepository expenseRepo,
       ProductStoreStockRepository stockRepo,
       RolePermissionService permissionService,
-      SubscriptionService subscriptionService) {
+      SubscriptionService subscriptionService,
+      BusinessRepository businessRepo) {
     this.saleRepo = saleRepo;
     this.saleLineRepo = saleLineRepo;
     this.productRepo = productRepo;
@@ -68,6 +78,7 @@ public class DashboardService {
     this.stockRepo = stockRepo;
     this.permissionService = permissionService;
     this.subscriptionService = subscriptionService;
+    this.businessRepo = businessRepo;
   }
 
   public DashboardResponse getDashboard(
@@ -82,16 +93,9 @@ public class DashboardService {
 
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
     LocalDate today = LocalDate.now(ZoneId.systemDefault());
-    LocalDate effStart = periodStart;
-    LocalDate effEnd = periodEnd;
-    if (planOpt.isPresent() && !Boolean.TRUE.equals(planOpt.get().getFeatureReports())) {
-      effStart = today;
-      effEnd = today;
-    }
-    effStart = subscriptionService.clampPeriodStartToRetention(bId, effStart);
-    if (effEnd.isBefore(effStart)) {
-      effEnd = effStart;
-    }
+    EffectivePeriod ep = resolveEffectivePeriod(bId, periodStart, periodEnd, planOpt);
+    LocalDate effStart = ep.effStart();
+    LocalDate effEnd = ep.effEnd();
     boolean limitedAnalytics =
         planOpt.isPresent() && !Boolean.TRUE.equals(planOpt.get().getFeatureReports());
     boolean showLowStock =
@@ -99,8 +103,8 @@ public class DashboardService {
 
     Instant todayStart = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
     Instant todayEnd = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
-    Instant pStart = effStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
-    Instant pEnd = effEnd.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+    Instant pStart = ep.pStart();
+    Instant pEnd = ep.pEnd();
 
     long todaySalesCount =
         storeId != null
@@ -133,6 +137,11 @@ public class DashboardService {
             .mapToLong(s -> s.getTotal() != null ? s.getTotal() : 0)
             .sum();
 
+    long todayExpenses =
+        storeId != null
+            ? expenseRepo.sumAmountByBusinessIdAndStoreIdAndDateBetween(bId, storeId, today, today)
+            : expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, today, today);
+
     long periodExpenses =
         storeId != null
             ? expenseRepo.sumAmountByBusinessIdAndStoreIdAndDateBetween(
@@ -148,27 +157,13 @@ public class DashboardService {
     List<Store> businessStores = storeRepo.findByBusinessId(bId);
     long totalStores = businessStores.size();
 
-    List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
-    if (showLowStock) {
-      List<Store> storesForStock =
-          storeId != null
-              ? businessStores.stream().filter(s -> s.getId().equals(storeId)).toList()
-              : businessStores;
-      for (Store store : storesForStock) {
-        for (ProductStoreStock s : stockRepo.findByStoreId(store.getId())) {
-          if (s.isLowStock()) {
-            Product pr = productRepo.findById(s.getProductId()).orElse(null);
-            lowStock.add(
-                new DashboardResponse.LowStockItem(
-                    s.getProductId(),
-                    pr != null ? pr.getName() : "Unknown",
-                    store.getName(),
-                    s.getQuantity(),
-                    s.getMinStock()));
-          }
-        }
-      }
-    }
+    List<DashboardResponse.LowStockItem> allLowStock =
+        buildLowStockItems(storeId, showLowStock, businessStores);
+    long lowStockItemsTotal = allLowStock.size();
+    List<DashboardResponse.LowStockItem> lowStock =
+        allLowStock.size() <= DASHBOARD_LIST_PREVIEW
+            ? allLowStock
+            : allLowStock.subList(0, DASHBOARD_LIST_PREVIEW);
 
     var recentPage =
         storeId != null
@@ -193,32 +188,22 @@ public class DashboardService {
                         s.getCreatedAt().toString()))
             .toList();
 
-    // Top products
-    Map<UUID, long[]> productStats = new HashMap<>();
-    for (Sale sale : periodSales) {
-      for (SaleLine line : saleLineRepo.findBySaleId(sale.getId())) {
-        productStats.computeIfAbsent(line.getProductId(), k -> new long[] {0, 0});
-        productStats.get(line.getProductId())[0] += line.getQuantity();
-        productStats.get(line.getProductId())[1] += line.getLineTotal();
-      }
-    }
+    List<DashboardResponse.TopProduct> allTopProducts = topProductsFromPeriodSales(periodSales);
+    long topProductsTotal = allTopProducts.size();
     List<DashboardResponse.TopProduct> topProducts =
-        productStats.entrySet().stream()
-            .sorted((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]))
-            .limit(10)
-            .map(
-                e -> {
-                  Product pr = productRepo.findById(e.getKey()).orElse(null);
-                  return new DashboardResponse.TopProduct(
-                      e.getKey(),
-                      pr != null ? pr.getName() : "Unknown",
-                      e.getValue()[0],
-                      e.getValue()[1]);
-                })
-            .toList();
+        allTopProducts.size() <= DASHBOARD_LIST_PREVIEW
+            ? allTopProducts
+            : allTopProducts.subList(0, DASHBOARD_LIST_PREVIEW);
 
     Long periodGrossMargin = null;
     List<DashboardResponse.TopMarginProduct> topMarginProducts = List.of();
+    String businessCreatedAtIso =
+        businessRepo
+            .findById(bId)
+            .map(Business::getCreatedAt)
+            .map(Instant::toString)
+            .orElse(null);
+
     if (planOpt.isPresent()
         && Boolean.TRUE.equals(planOpt.get().getFeatureAdvancedReports())) {
       long gm = 0;
@@ -252,6 +237,7 @@ public class DashboardService {
     return new DashboardResponse(
         todaySalesCount,
         todayRevenue,
+        todayExpenses,
         periodSalesCount,
         periodRevenue,
         periodExpenses,
@@ -265,7 +251,44 @@ public class DashboardService {
         topProducts,
         limitedAnalytics,
         periodGrossMargin,
-        topMarginProducts);
+        topMarginProducts,
+        topProductsTotal,
+        lowStockItemsTotal,
+        businessCreatedAtIso);
+  }
+
+  public DashboardSliceResponse<DashboardResponse.TopProduct> sliceTopProducts(
+      UserPrincipal p,
+      LocalDate periodStart,
+      LocalDate periodEnd,
+      UUID storeId,
+      int page,
+      int size) {
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    UUID bId = p.businessId();
+    Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
+    EffectivePeriod ep = resolveEffectivePeriod(bId, periodStart, periodEnd, planOpt);
+    List<DashboardResponse.TopProduct> all =
+        buildTopProductsForPeriod(bId, storeId, ep.pStart(), ep.pEnd());
+    return sliceList(all, page, size);
+  }
+
+  public DashboardSliceResponse<DashboardResponse.LowStockItem> sliceLowStockItems(
+      UserPrincipal p, UUID storeId, int page, int size) {
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    UUID bId = p.businessId();
+    Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
+    boolean showLowStock =
+        planOpt.isEmpty() || Boolean.TRUE.equals(planOpt.get().getFeatureStockAlerts());
+    int safeSize = Math.min(Math.max(size, 1), SLICE_MAX_SIZE);
+    int safePage = Math.max(page, 0);
+    if (!showLowStock) {
+      return new DashboardSliceResponse<>(List.of(), 0, safePage, safeSize, false);
+    }
+    List<Store> businessStores = storeRepo.findByBusinessId(bId);
+    List<DashboardResponse.LowStockItem> all =
+        buildLowStockItems(storeId, true, businessStores);
+    return sliceList(all, page, size);
   }
 
   public GlobalViewResponse getGlobalView(
@@ -384,5 +407,114 @@ public class DashboardService {
         salesByStore,
         lowStock,
         topProducts);
+  }
+
+  private record EffectivePeriod(
+      LocalDate effStart, LocalDate effEnd, Instant pStart, Instant pEnd) {}
+
+  private EffectivePeriod resolveEffectivePeriod(
+      UUID businessId, LocalDate periodStart, LocalDate periodEnd, Optional<Plan> planOpt) {
+    LocalDate today = LocalDate.now(ZoneId.systemDefault());
+    LocalDate effStart = periodStart;
+    LocalDate effEnd = periodEnd;
+    if (planOpt.isPresent() && !Boolean.TRUE.equals(planOpt.get().getFeatureReports())) {
+      effStart = today;
+      effEnd = today;
+    }
+    effStart = subscriptionService.clampPeriodStartToRetention(businessId, effStart);
+    if (effEnd.isBefore(effStart)) {
+      effEnd = effStart;
+    }
+    Instant pStart = effStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
+    Instant pEnd = effEnd.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+    return new EffectivePeriod(effStart, effEnd, pStart, pEnd);
+  }
+
+  private List<DashboardResponse.TopProduct> buildTopProductsForPeriod(
+      UUID bId, UUID storeId, Instant pStart, Instant pEnd) {
+    Pageable all = Pageable.unpaged();
+    List<Sale> periodSales =
+        (storeId != null
+                ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(bId, storeId, all)
+                : saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, all))
+            .stream()
+            .filter(
+                s ->
+                    s.isCompleted()
+                        && !s.getCreatedAt().isBefore(pStart)
+                        && s.getCreatedAt().isBefore(pEnd))
+            .toList();
+    return topProductsFromPeriodSales(periodSales);
+  }
+
+  private List<DashboardResponse.TopProduct> topProductsFromPeriodSales(List<Sale> periodSales) {
+    Map<UUID, long[]> productStats = new HashMap<>();
+    for (Sale sale : periodSales) {
+      for (SaleLine line : saleLineRepo.findBySaleId(sale.getId())) {
+        productStats.computeIfAbsent(line.getProductId(), k -> new long[] {0, 0});
+        productStats.get(line.getProductId())[0] += line.getQuantity();
+        productStats.get(line.getProductId())[1] += line.getLineTotal();
+      }
+    }
+    return productStats.entrySet().stream()
+        .sorted(
+            (a, b) -> {
+              int cmp = Long.compare(b.getValue()[1], a.getValue()[1]);
+              if (cmp != 0) return cmp;
+              return a.getKey().toString().compareTo(b.getKey().toString());
+            })
+        .map(
+            e -> {
+              Product pr = productRepo.findById(e.getKey()).orElse(null);
+              return new DashboardResponse.TopProduct(
+                  e.getKey(),
+                  pr != null ? pr.getName() : "Unknown",
+                  e.getValue()[0],
+                  e.getValue()[1]);
+            })
+        .toList();
+  }
+
+  private List<DashboardResponse.LowStockItem> buildLowStockItems(
+      UUID storeId, boolean showLowStock, List<Store> businessStores) {
+    List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
+    if (!showLowStock) {
+      return lowStock;
+    }
+    List<Store> storesForStock =
+        storeId != null
+            ? businessStores.stream().filter(s -> s.getId().equals(storeId)).toList()
+            : businessStores;
+    for (Store store : storesForStock) {
+      for (ProductStoreStock s : stockRepo.findByStoreId(store.getId())) {
+        if (s.isLowStock()) {
+          Product pr = productRepo.findById(s.getProductId()).orElse(null);
+          lowStock.add(
+              new DashboardResponse.LowStockItem(
+                  s.getProductId(),
+                  pr != null ? pr.getName() : "Unknown",
+                  store.getName(),
+                  s.getQuantity(),
+                  s.getMinStock()));
+        }
+      }
+    }
+    lowStock.sort(
+        Comparator.comparing(DashboardResponse.LowStockItem::storeName)
+            .thenComparing(DashboardResponse.LowStockItem::productName));
+    return lowStock;
+  }
+
+  private static <T> DashboardSliceResponse<T> sliceList(List<T> all, int page, int size) {
+    int safeSize = Math.min(Math.max(size, 1), SLICE_MAX_SIZE);
+    int safePage = Math.max(page, 0);
+    long total = all.size();
+    int from = safePage * safeSize;
+    if (from >= total) {
+      return new DashboardSliceResponse<>(List.of(), total, safePage, safeSize, false);
+    }
+    int to = Math.min(from + safeSize, (int) total);
+    boolean hasNext = to < total;
+    return new DashboardSliceResponse<>(all.subList(from, to), total, safePage, safeSize, hasNext);
   }
 }

@@ -6,6 +6,8 @@ import java.util.UUID;
 public record DashboardResponse(
     long todaySalesCount,
     long todayRevenue,
+    /** Dépenses enregistrées pour la date du jour (filtrage par date de dépense). */
+    long todayExpenses,
     long periodSalesCount,
     long periodRevenue,
     long periodExpenses,
@@ -19,7 +21,13 @@ public record DashboardResponse(
     List<TopProduct> topProducts,
     boolean analyticsLimitedToToday,
     Long periodGrossMargin,
-    List<TopMarginProduct> topMarginProducts) {
+    List<TopMarginProduct> topMarginProducts,
+    /** Nombre total de produits (période) — les {@code topProducts} ne contiennent qu’un aperçu. */
+    long topProductsTotal,
+    /** Nombre total de lignes stock faible — les {@code lowStockItems} ne contiennent qu’un aperçu. */
+    long lowStockItemsTotal,
+    /** ISO-8601 : date de création du commerce (onboarding dashboard max 2 jours côté client). */
+    String businessCreatedAt) {
   public record LowStockItem(
       UUID productId, String productName, String storeName, int quantity, int minStock) {}
 
