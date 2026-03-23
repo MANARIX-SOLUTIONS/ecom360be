@@ -1,0 +1,66 @@
+# ──────────────────────────────────────────────────────────────
+# Docker Compose — local development stack (Postgres + API + Maildev)
+# Usage: docker compose up -d
+# Maildev UI: http://localhost:1080 (catches all outgoing emails)
+# ──────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecom360-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecom360
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API (dev) ──
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecom360-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ecom360
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: dev-only-secret-key-min-32-characters-long-change-in-prod
+      SERVER_PORT: 8080
+      MAIL_HOST: maildev
+      MAIL_PORT: 1025
+      MAIL_FROM: noreply@ecom360.local
+    ports:
+      - "8080:8080"
+
+  # ── Maildev (email testing — SMTP + Web UI) ──
+  maildev:
+    image: maildev/maildev:2.0.5
+    container_name: ecom360-maildev
+    restart: unless-stopped
+    ports:
+      - "1080:1080"   # Web UI
+      - "1025:1025"   # SMTP
+    command: ["bin/maildev", "--web", "1080", "--smtp", "1025"]
+
+volumes:
+  pgdata:
+    driver: local

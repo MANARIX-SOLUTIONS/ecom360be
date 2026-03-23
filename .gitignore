@@ -1,0 +1,50 @@
+# ── Gradle / IDE copy ──
+.gradle/
+build/
+bin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ── IDE ──
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+nbproject/
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# ── Application ──
+*.log
+logs/
+application-local.yml
+application-local.properties
+
+# ── Secrets — NEVER commit these ──
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+secrets.yml
+
+# ── Test ──
+/target/
+/test-output/
+/test-results/
+
+# ── Coverage ──
+*.exec
+jacoco/
+
+# ── Docker ──
+docker-compose.override.yml
