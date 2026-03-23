@@ -1,0 +1,60 @@
+# ──────────────────────────────────────────────────────────────
+# Dependabot — automated dependency updates
+# ──────────────────────────────────────────────────────────────
+version: 2
+
+updates:
+  # Java / Gradle dependencies
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "ecom360/backend"
+    labels:
+      - "dependencies"
+      - "java"
+    groups:
+      spring-boot:
+        patterns:
+          - "org.springframework*"
+        update-types:
+          - "minor"
+          - "patch"
+      testing:
+        patterns:
+          - "org.testcontainers*"
+          - "org.junit*"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # GitHub Actions versions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+
+  # Docker base image updates
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
