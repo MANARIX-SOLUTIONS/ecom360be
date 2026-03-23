@@ -1,0 +1,88 @@
+package com.ecom360.identity.domain.model;
+
+/**
+ * Permissions granulaires par ressource et action. Le périmètre est activé selon le rôle
+ * (propriétaire, gestionnaire, caissier).
+ */
+public enum Permission {
+  // Produits
+  PRODUCTS_CREATE,
+  PRODUCTS_READ,
+  PRODUCTS_UPDATE,
+  PRODUCTS_DELETE,
+
+  // Catégories
+  CATEGORIES_CREATE,
+  CATEGORIES_READ,
+  CATEGORIES_UPDATE,
+  CATEGORIES_DELETE,
+
+  // Stock
+  STOCK_READ,
+  STOCK_INIT,
+  STOCK_ADJUST,
+
+  // Clients
+  CLIENTS_CREATE,
+  CLIENTS_READ,
+  CLIENTS_UPDATE,
+  CLIENTS_DELETE,
+
+  // Fournisseurs
+  SUPPLIERS_CREATE,
+  SUPPLIERS_READ,
+  SUPPLIERS_UPDATE,
+  SUPPLIERS_DELETE,
+
+  // Commandes fournisseurs
+  PURCHASE_ORDERS_CREATE,
+  PURCHASE_ORDERS_READ,
+  PURCHASE_ORDERS_UPDATE,
+  PURCHASE_ORDERS_DELETE,
+
+  // Ventes
+  SALES_CREATE,
+  SALES_READ,
+  SALES_UPDATE,
+  SALES_DELETE,
+
+  // Dépenses
+  EXPENSES_CREATE,
+  EXPENSES_READ,
+  EXPENSES_UPDATE,
+  EXPENSES_DELETE,
+
+  // Livraison / Livreurs (plan PRO)
+  DELIVERY_COURIERS_CREATE,
+  DELIVERY_COURIERS_READ,
+  DELIVERY_COURIERS_UPDATE,
+  DELIVERY_COURIERS_DELETE,
+
+  // Boutiques
+  STORES_CREATE,
+  STORES_READ,
+  STORES_UPDATE,
+  STORES_DELETE,
+
+  // Vue globale (toutes les boutiques — plan Pro/Business, rôles propriétaire/gestionnaire)
+  GLOBAL_VIEW_READ,
+
+  // Abonnement
+  SUBSCRIPTION_READ,
+  SUBSCRIPTION_UPDATE,
+
+  // Utilisateurs / équipe
+  BUSINESS_USERS_CREATE,
+  BUSINESS_USERS_READ,
+  BUSINESS_USERS_UPDATE,
+  BUSINESS_USERS_DELETE,
+
+  // Intégrations
+  API_KEYS_CREATE,
+  API_KEYS_READ,
+  API_KEYS_DELETE,
+  WEBHOOKS_CREATE,
+  WEBHOOKS_READ,
+  WEBHOOKS_UPDATE,
+  WEBHOOKS_DELETE
+}
