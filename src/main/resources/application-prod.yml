@@ -1,0 +1,121 @@
+# ──────────────────────────────────────────────────────────────
+# PROD profile — Hardened, performant, secure
+# Activate: SPRING_PROFILES_ACTIVE=prod
+# ALL secrets MUST come from env vars / vault — never defaults
+# ──────────────────────────────────────────────────────────────
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/neondb}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    hikari:
+      minimum-idle: ${HIKARI_MIN_IDLE:10}
+      maximum-pool-size: ${HIKARI_MAX_POOL:40}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:15000}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:180000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:900000}
+      leak-detection-threshold: 30000
+      data-source-properties:
+        prepareThreshold: 5
+        preparedStatementCacheQueries: 512
+        preparedStatementCacheSizeMiB: 10
+        reWriteBatchedInserts: true
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        generate_statistics: false
+        jdbc:
+          batch_size: 50
+          fetch_size: 100
+        query:
+          plan_cache_max_size: 2048
+          in_clause_parameter_padding: true
+
+  # ── Mail: empty by default on VPS (no maildev); set MAIL_HOST for real SMTP
+  mail:
+    host: ${MAIL_HOST:}
+
+  flyway:
+    enabled: false # no auto-migrate in prod; run migrations separately
+    clean-disabled: true # NEVER clean prod
+    validate-on-migrate: true
+    # out-of-order inherited from base (true) to allow V8.1 migration
+
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=2000,expireAfterWrite=300s
+
+# ── Server — production tuning ──
+server:
+  port: 8090
+  error:
+    include-message: never # never leak internals
+    include-binding-errors: never
+    include-stacktrace: never
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
+  tomcat:
+    threads:
+      min-spare: 20
+      max: 400
+    accept-count: 200
+    max-connections: 16384
+    connection-timeout: 10000
+    keep-alive-timeout: 15000
+    max-keep-alive-requests: 200
+  http2:
+    enabled: true
+
+# ── JWT ──
+jwt:
+  secret: ${JWT_SECRET} # REQUIRED — no default
+  expiration-ms: 3600000 # 1h in prod
+  refresh-expiration-ms: 86400000 # 24h
+
+# ── CORS — restrict to known origins ──
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS} # REQUIRED
+
+# ── Swagger OFF in prod ──
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# ── Actuator — secured, limited ──
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,caches
+  endpoint:
+    health:
+      show-details: when_authorized
+      group:
+        readiness:
+          include: db,diskSpace
+        liveness:
+          include: ping
+
+# ── Logging — structured JSON for log aggregation ──
+logging:
+  level:
+    root: WARN
+    com.ecom360: INFO
+    org.springframework.security: WARN
+    org.hibernate: WARN
+    org.flywaydb: INFO
+  pattern:
+    # Fallback if logback-spring.xml isn't used
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"

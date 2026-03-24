@@ -1,0 +1,210 @@
+# ──────────────────────────────────────────────────────────────
+# CD — Build Docker image → push to GHCR → deploy
+# Triggers:
+#   - Push to develop → staging
+#   - Push to main    → production (manual approval gate)
+#   - Release tag     → production (auto)
+# ──────────────────────────────────────────────────────────────
+name: CD
+
+on:
+  push:
+    branches: [main, develop]
+  release:
+    types: [published]
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false          # never cancel deployments
+
+permissions:
+  contents: read
+  packages: write                    # push to GHCR
+  id-token: write                    # OIDC for cloud deploys
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ════════════════════════════════════════════════════════════
+  # 1. Build & Push Docker image
+  # ════════════════════════════════════════════════════════════
+  build-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build-push.outputs.digest }}
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "version=main-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+
+      - name: Build and push
+        id: build-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Image summary
+        run: |
+          echo "### Docker Image Published 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ steps.build-push.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ════════════════════════════════════════════════════════════
+  # 2. Deploy to STAGING (develop branch)
+  # ════════════════════════════════════════════════════════════
+  deploy-staging:
+    name: Deploy → Staging
+    needs: build-image
+    if: github.ref == 'refs/heads/develop'                                                  
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        env:
+          IMAGE_TAG: ${{ needs.build-image.outputs.version }}
+          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_USER }}
+          DEPLOY_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          echo "🚀 Deploying $IMAGE_TAG to staging..."
+          # ── Option A: SSH + docker compose ──
+          # mkdir -p ~/.ssh
+          # echo "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          # ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST << EOF
+          #   cd /opt/ecom360
+          #   export IMAGE_TAG=$IMAGE_TAG
+          #   docker compose -f docker-compose.staging.yml pull
+          #   docker compose -f docker-compose.staging.yml up -d --remove-orphans
+          #   docker compose -f docker-compose.staging.yml exec -T api wget --spider http://localhost:8080/actuator/health || exit 1
+          # EOF
+          echo "✅ Staging deployment placeholder — configure secrets to activate"
+
+      - name: Verify health
+        if: vars.STAGING_URL != ''
+        run: |
+          echo "Waiting for staging to be healthy..."
+          for i in $(seq 1 30); do
+            if curl -sf "${{ vars.STAGING_URL }}/actuator/health" > /dev/null 2>&1; then
+              echo "✅ Staging is healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "❌ Staging health check failed"
+          exit 1
+
+  # ════════════════════════════════════════════════════════════
+  # 3. Deploy to PRODUCTION (main branch or release tag)
+  # ════════════════════════════════════════════════════════════
+  deploy-production:
+    name: Deploy → Production
+    needs: build-image
+    if: github.ref == 'refs/heads/main' || github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production                # requires manual approval in GitHub settings    
+      url: ${{ vars.PRODUCTION_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        env:
+          IMAGE_TAG: ${{ needs.build-image.outputs.version }}
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          DEPLOY_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+        run: |
+          echo "🚀 Deploying $IMAGE_TAG to production..."
+          # ── Option A: SSH + docker compose ──
+          # mkdir -p ~/.ssh
+          # echo "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          # ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST << EOF
+          #   cd /opt/ecom360
+          #   export IMAGE_TAG=$IMAGE_TAG
+          #   docker compose -f docker-compose.prod.yml pull
+          #   docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          #   sleep 30
+          #   docker compose -f docker-compose.prod.yml exec -T api wget --spider http://localhost:8080/actuator/health || exit 1
+          # EOF
+
+          # ── Option B: Kubernetes ──
+          # kubectl set image deployment/ecom360-api api=$REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+          # kubectl rollout status deployment/ecom360-api --timeout=300s
+
+          echo "✅ Production deployment placeholder — configure secrets to activate"
+
+      - name: Verify health
+        if: vars.PRODUCTION_URL != ''
+        run: |
+          echo "Waiting for production to be healthy..."
+          for i in $(seq 1 30); do
+            if curl -sf "${{ vars.PRODUCTION_URL }}/actuator/health" > /dev/null 2>&1; then
+              echo "✅ Production is healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "❌ Production health check failed"
+          exit 1
+
+      - name: Deployment summary
+        run: |
+          echo "### Production Deployment 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ needs.build-image.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ vars.PRODUCTION_URL }}" >> $GITHUB_STEP_SUMMARY

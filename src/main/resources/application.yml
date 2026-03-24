@@ -1,0 +1,190 @@
+# ──────────────────────────────────────────────────────────────
+# 360 PME Commerce — Base Configuration (all environments)
+# Profile activation: SPRING_PROFILES_ACTIVE=dev|test|prod
+# ──────────────────────────────────────────────────────────────
+
+spring:
+  application:
+    name: ecom360-api
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    # Single placeholder only — avoids literal ${DB_HOST} when env is not loaded (e.g. systemd)
+#    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-odd-surf-aiz9l39y-pooler.c-4.us-east-1.aws.neon.tech/ecom360pmedb_dev?sslmode=require&channelBinding=require}
+#    username: ${DB_USERNAME:neondb_owner}
+#    password: ${DB_PASSWORD:npg_X17KrjSIoVmD}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ecom360-pool
+      auto-commit: false
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:20000}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:300000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:1200000}
+      minimum-idle: ${HIKARI_MIN_IDLE:5}
+      maximum-pool-size: ${HIKARI_MAX_POOL:20}
+      leak-detection-threshold: ${HIKARI_LEAK_DETECTION:60000}
+      data-source-properties:
+        # PostgreSQL connection tuning
+        prepareThreshold: 5
+        preparedStatementCacheQueries: 256
+        preparedStatementCacheSizeMiB: 5
+        reWriteBatchedInserts: true
+
+  # ── JPA / Hibernate ──
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 25
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+        generate_statistics: ${HIBERNATE_STATS:false}
+        connection:
+          provider_disables_autocommit: true
+        default_schema: public
+
+  # ── Flyway ──
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    connect-retries: 3
+    connect-retries-interval: 5
+    validate-on-migrate: true
+    out-of-order: true        # allow V8.1 to run after V8 was already applied
+
+  # ── Mail (optional — set MAIL_HOST to enable; when empty, emails are logged only) ──
+  mail:
+    host: ${MAIL_HOST:maildev}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    from: ${MAIL_FROM:noreply@ecom360.local}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_USERNAME:false}
+          starttls:
+            enable: ${MAIL_USERNAME:false}
+
+  # ── Jackson ──
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+  # ── Async task execution ──
+  task:
+    execution:
+      pool:
+        core-size: ${ASYNC_CORE_SIZE:4}
+        max-size: ${ASYNC_MAX_SIZE:16}
+        queue-capacity: ${ASYNC_QUEUE_CAPACITY:200}
+      thread-name-prefix: ecom360-async-
+
+  # ── Cache ──
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=600s
+
+# ── Server ──
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+  tomcat:
+    threads:
+      min-spare: ${TOMCAT_MIN_THREADS:10}
+      max: ${TOMCAT_MAX_THREADS:200}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:8192}
+    connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:20000}
+    keep-alive-timeout: ${TOMCAT_KEEP_ALIVE_TIMEOUT:30000}
+
+# ── Graceful shutdown ──
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# ── JWT ──
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-change-in-production-min-32-chars}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+
+# ── API ──
+api:
+  version: v1
+  base-path: /api/${api.version}
+  pagination:
+    default-size: 20
+    max-size: 100
+
+# ── App (frontend URL for email links) ──
+app:
+  url: ${APP_URL:http://localhost:5173}
+  subscription:
+    expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
+    max-age: 3600
+
+# ── OpenAPI / Swagger ──
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    enabled: ${SWAGGER_ENABLED:true}
+
+# ── Actuator ──
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${ACTUATOR_ENDPOINTS:health,info,metrics,caches}
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: ${ACTUATOR_HEALTH_DETAILS:when_authorized}
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# ── Logging (base — overridden per-profile) ──
+logging:
+  level:
+    root: INFO
+    com.ecom360: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.stat: WARN
+    org.flywaydb: INFO

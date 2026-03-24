@@ -1,0 +1,63 @@
+# ──────────────────────────────────────────────────────────────
+# TEST profile — Fast CI/integration tests
+# Activate: SPRING_PROFILES_ACTIVE=test
+# Uses Testcontainers PostgreSQL (or override DB_* vars)
+# ──────────────────────────────────────────────────────────────
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360_test}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 5
+      connection-timeout: 10000
+      leak-detection-threshold: 0   # off in tests
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        generate_statistics: false
+
+  flyway:
+    clean-disabled: false
+    clean-on-validation-error: true
+
+  cache:
+    type: none                        # disable cache in tests
+
+# ── Server (random port for parallel tests) ──
+server:
+  port: 0
+
+# ── JWT (short-lived for test speed) ──
+jwt:
+  secret: test-secret-key-min-32-chars-for-hmac-sha256-ok
+  expiration-ms: 60000                # 1 min
+  refresh-expiration-ms: 120000       # 2 min
+
+# ── Swagger OFF ──
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# ── Actuator — minimal ──
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+# ── Logging — quiet ──
+logging:
+  level:
+    root: WARN
+    com.ecom360: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.flywaydb: WARN
+    org.testcontainers: INFO

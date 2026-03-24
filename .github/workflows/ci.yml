@@ -1,0 +1,128 @@
+# ──────────────────────────────────────────────────────────────
+# CI — Continuous Integration
+# Triggers: every push to main/develop, every PR
+# Steps:  lint → compile → test (Testcontainers PG) → coverage
+# ──────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true          # kill old runs on same branch
+
+permissions:
+  contents: read
+  checks: write                      # for test report annotations
+  pull-requests: write               # for coverage comment
+
+env:
+  JAVA_VERSION: "17"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true"
+
+jobs:
+  # ════════════════════════════════════════════════════════════
+  # 1. Build & Test
+  # ════════════════════════════════════════════════════════════
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ecom360_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
+      - name: Check formatting
+        run: ./gradlew spotlessCheck --no-daemon
+
+      - name: Compile
+        run: ./gradlew compileJava compileTestJava --no-daemon
+
+      - name: Run tests
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: ecom360_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: ci-test-secret-key-min-32-characters-long-for-hmac
+        run: ./gradlew test --no-daemon
+
+      - name: Generate coverage report
+        if: always()
+        run: ./gradlew jacocoTestReport --no-daemon
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/tests/test/
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build/reports/jacoco/test/html/
+          retention-days: 7
+
+      - name: Upload coverage XML (for PR comment)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: build/reports/jacoco/test/jacocoTestReport.xml
+          retention-days: 3
+
+      - name: Test Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: JUnit Results
+          path: build/test-results/test/*.xml
+          reporter: java-junit
+          fail-on-empty: false
+
+      - name: Verify build artifact
+        run: ./gradlew bootJar --no-daemon -x test
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs/*.jar
+          retention-days: 3

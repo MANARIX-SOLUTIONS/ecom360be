@@ -1,0 +1,129 @@
+# ──────────────────────────────────────────────────────────────
+# Security — SAST, dependency audit, container scan
+# Runs: weekly schedule + on PRs to main
+# ──────────────────────────────────────────────────────────────
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"              # every Monday 06:00 UTC
+  workflow_dispatch:                  # manual trigger
+
+permissions:
+  contents: read
+  security-events: write             # for CodeQL alerts
+
+env:
+  JAVA_VERSION: "17"
+
+jobs:
+  # ════════════════════════════════════════════════════════════
+  # 1. CodeQL — Static Application Security Testing (SAST)
+  # ════════════════════════════════════════════════════════════
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java
+          queries: security-and-quality
+
+      - name: Build for CodeQL
+        run: ./gradlew compileJava --no-daemon
+
+      - name: Perform analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:java"
+
+  # ════════════════════════════════════════════════════════════
+  # 2. Dependency Audit — known CVEs in dependencies
+  # ════════════════════════════════════════════════════════════
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Dependency review (PRs only)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-2.0, GPL-3.0
+
+      - name: Gradle dependency verification
+        run: ./gradlew dependencies --no-daemon > /dev/null
+
+  # ════════════════════════════════════════════════════════════
+  # 3. Trivy — Container image vulnerability scan
+  # ════════════════════════════════════════════════════════════
+  trivy:
+    name: Container Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ecom360-scan:latest .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ecom360-scan:latest
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0                 # warn, don't fail (change to 1 to enforce)
+
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  # ════════════════════════════════════════════════════════════
+  # 4. Secret Scanning — detect leaked secrets in code
+  # ════════════════════════════════════════════════════════════
+  secrets-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0              # full history for scanning
+
+      - name: TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
