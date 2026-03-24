@@ -129,6 +129,25 @@ public class SubscriptionService {
         .flatMap(sub -> planRepository.findById(sub.getPlanId()));
   }
 
+  /**
+   * Enforces {@code max_stores} from the current plan when adding a store. No-op when no
+   * access-granting subscription exists (same behaviour as previous inline checks).
+   */
+  public void assertCanAddStore(UUID businessId, int currentStoreCount) {
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!plan.isUnlimited(plan.getMaxStores())) {
+                if (currentStoreCount >= plan.getMaxStores()) {
+                  throw new BusinessRuleException(
+                      "Limite du plan atteinte : maximum "
+                          + plan.getMaxStores()
+                          + " magasin(s). Passez à un plan supérieur.");
+                }
+              }
+            });
+  }
+
   public LocalDate clampPeriodStartToRetention(UUID businessId, LocalDate periodStart) {
     return getPlanForBusiness(businessId)
         .map(

@@ -7,6 +7,8 @@ import com.ecom360.admin.application.dto.AdminPlanItem;
 import com.ecom360.admin.application.dto.AdminUpdateBusinessRequest;
 import com.ecom360.admin.application.service.AdminBusinessService;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.tenant.application.dto.SubscriptionUsageResponse;
+import com.ecom360.tenant.application.service.SubscriptionUsageService;
 import com.ecom360.shared.application.dto.PageResponse;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,9 +30,13 @@ import org.springframework.web.bind.annotation.*;
 public class AdminBusinessController {
 
   private final AdminBusinessService adminBusinessService;
+  private final SubscriptionUsageService subscriptionUsageService;
 
-  public AdminBusinessController(AdminBusinessService adminBusinessService) {
+  public AdminBusinessController(
+      AdminBusinessService adminBusinessService,
+      SubscriptionUsageService subscriptionUsageService) {
     this.adminBusinessService = adminBusinessService;
+    this.subscriptionUsageService = subscriptionUsageService;
   }
 
   @GetMapping
@@ -59,6 +65,13 @@ public class AdminBusinessController {
   public ResponseEntity<AdminBusinessResponse> getById(
       @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(adminBusinessService.getById(id, p));
+  }
+
+  @GetMapping("/{id}/subscription/usage")
+  @Operation(summary = "Usage vs limites du plan pour une entreprise (admin)")
+  public ResponseEntity<SubscriptionUsageResponse> getSubscriptionUsage(
+      @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(subscriptionUsageService.getUsageForBusiness(id, p));
   }
 
   @PostMapping

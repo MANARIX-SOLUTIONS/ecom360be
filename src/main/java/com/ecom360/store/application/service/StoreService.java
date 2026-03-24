@@ -4,7 +4,6 @@ import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
-import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.store.application.dto.StoreRequest;
 import com.ecom360.store.application.dto.StoreResponse;
@@ -46,20 +45,8 @@ public class StoreService {
   public StoreResponse create(StoreRequest req, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.STORES_CREATE);
-    subscriptionService
-        .getPlanForBusiness(p.businessId())
-        .ifPresent(
-            plan -> {
-              if (!plan.isUnlimited(plan.getMaxStores())) {
-                int count = storeRepository.findByBusinessId(p.businessId()).size();
-                if (count >= plan.getMaxStores()) {
-                  throw new BusinessRuleException(
-                      "Limite du plan atteinte : maximum "
-                          + plan.getMaxStores()
-                          + " magasin(s). Passez à un plan supérieur.");
-                }
-              }
-            });
+    subscriptionService.assertCanAddStore(
+        p.businessId(), storeRepository.findByBusinessId(p.businessId()).size());
     Store s = Store.create(p.businessId(), req.name(), req.address(), req.phone());
     return map(storeRepository.save(s));
   }

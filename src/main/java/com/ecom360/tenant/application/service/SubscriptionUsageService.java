@@ -6,10 +6,13 @@ import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.sales.domain.repository.SaleRepository;
+import com.ecom360.shared.domain.exception.AccessDeniedException;
+import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.supplier.domain.repository.SupplierRepository;
 import com.ecom360.tenant.application.dto.SubscriptionUsageResponse;
 import com.ecom360.tenant.domain.model.Plan;
+import com.ecom360.tenant.domain.repository.BusinessRepository;
 import com.ecom360.tenant.domain.repository.BusinessUserRepository;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,6 +25,7 @@ import org.springframework.stereotype.Service;
 public class SubscriptionUsageService {
 
   private final SubscriptionService subscriptionService;
+  private final BusinessRepository businessRepository;
   private final BusinessUserRepository businessUserRepository;
   private final StoreRepository storeRepository;
   private final ProductRepository productRepository;
@@ -32,6 +36,7 @@ public class SubscriptionUsageService {
 
   public SubscriptionUsageService(
       SubscriptionService subscriptionService,
+      BusinessRepository businessRepository,
       BusinessUserRepository businessUserRepository,
       StoreRepository storeRepository,
       ProductRepository productRepository,
@@ -40,6 +45,7 @@ public class SubscriptionUsageService {
       SaleRepository saleRepository,
       RolePermissionService permissionService) {
     this.subscriptionService = subscriptionService;
+    this.businessRepository = businessRepository;
     this.businessUserRepository = businessUserRepository;
     this.storeRepository = storeRepository;
     this.productRepository = productRepository;
@@ -54,8 +60,21 @@ public class SubscriptionUsageService {
       return new SubscriptionUsageResponse(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     permissionService.require(p, Permission.SUBSCRIPTION_READ);
-    UUID businessId = p.businessId();
+    return computeUsage(p.businessId());
+  }
 
+  /** Usage for any business (platform admin). */
+  public SubscriptionUsageResponse getUsageForBusiness(UUID businessId, UserPrincipal p) {
+    if (p == null || !p.isPlatformAdmin()) {
+      throw new AccessDeniedException("Platform admin only");
+    }
+    businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    return computeUsage(businessId);
+  }
+
+  private SubscriptionUsageResponse computeUsage(UUID businessId) {
     int usersCount = businessUserRepository.findByBusinessIdAndIsActive(businessId, true).size();
     int storesCount = storeRepository.findByBusinessId(businessId).size();
     long productsCount = productRepository.countByBusinessId(businessId);

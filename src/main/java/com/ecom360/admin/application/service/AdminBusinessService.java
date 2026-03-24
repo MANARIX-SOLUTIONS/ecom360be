@@ -8,6 +8,7 @@ import com.ecom360.identity.domain.model.User;
 import com.ecom360.identity.domain.repository.UserRepository;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.sales.domain.repository.SaleRepository;
+import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceAlreadyExistsException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.store.domain.repository.StoreRepository;
@@ -192,6 +193,25 @@ public class AdminBusinessService {
         businessRepository
             .findById(businessId)
             .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    Plan targetPlan =
+        planRepository
+            .findBySlug(planSlug.trim())
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    if (!Boolean.TRUE.equals(targetPlan.getIsActive())) {
+      throw new IllegalArgumentException("Plan is not active: " + planSlug);
+    }
+    int storeCount = storeRepository.findByBusinessId(businessId).size();
+    if (!targetPlan.isUnlimited(targetPlan.getMaxStores())
+        && storeCount > targetPlan.getMaxStores()) {
+      throw new BusinessRuleException(
+          "Cette entreprise compte "
+              + storeCount
+              + " magasin(s). Le plan « "
+              + targetPlan.getName()
+              + " » autorise au maximum "
+              + targetPlan.getMaxStores()
+              + " magasin(s). Réduisez le nombre de boutiques ou choisissez un plan supérieur.");
+    }
     String cycle =
         "yearly".equalsIgnoreCase(billingCycle != null ? billingCycle : "") ? "yearly" : "monthly";
     createActiveSubscriptionForBusiness(b.getId(), planSlug.trim(), cycle);
