@@ -68,6 +68,11 @@ public class SubscriptionRequiredFilter extends OncePerRequestFilter {
       return;
     }
 
+    if (request.getRequestURI().startsWith(ApiConstants.API_BASE + "/public/")) {
+      filterChain.doFilter(request, response);
+      return;
+    }
+
     boolean hasActiveSubscription =
         subscriptionRepository
             .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(

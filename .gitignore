@@ -25,6 +25,7 @@ ehthumbs.db
 # ── Application ──
 *.log
 logs/
+data/
 application-local.yml
 application-local.properties
 
