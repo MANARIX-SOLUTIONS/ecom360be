@@ -49,6 +49,7 @@ public class SecurityConfig {
     ApiConstants.API_BASE + "/auth/refresh",
     ApiConstants.API_BASE + "/auth/forgot-password",
     ApiConstants.API_BASE + "/auth/reset-password",
+    ApiConstants.API_BASE + "/public/**",
     "/api-docs/**",
     "/swagger-ui/**",
     "/swagger-ui.html",
