@@ -11,6 +11,9 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -18,6 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class BusinessLogoStorageService {
+
+  private static final Logger log = LoggerFactory.getLogger(BusinessLogoStorageService.class);
 
   private static final Pattern SAFE_FILENAME =
       Pattern.compile("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\\.(png|jpg|jpeg|webp|gif)$");
@@ -35,6 +40,17 @@ public class BusinessLogoStorageService {
             ? props.businessLogosDir()
             : "./data/uploads/business-logos";
     this.root = Path.of(dir).toAbsolutePath().normalize();
+  }
+
+  @PostConstruct
+  void ensureStorageRootExists() {
+    try {
+      Files.createDirectories(root);
+      log.info("Business logos storage ready at {}", root);
+    } catch (IOException e) {
+      throw new IllegalStateException(
+          "Cannot create or access BUSINESS_LOGOS_DIR (app.files.business-logos-dir): " + root, e);
+    }
   }
 
   /** Chemin relatif API stocké en base, ex. {@code /api/v1/public/business-logos/{id}/file.png} */

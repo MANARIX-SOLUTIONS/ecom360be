@@ -4,6 +4,8 @@ import com.ecom360.admin.application.dto.AdminBusinessMemberResponse;
 import com.ecom360.admin.application.dto.AdminBusinessRoleOptionResponse;
 import com.ecom360.admin.application.dto.AdminUpdateMemberRoleRequest;
 import com.ecom360.admin.application.service.AdminBusinessMemberService;
+import com.ecom360.admin.application.service.AdminBusinessRoleService;
+import com.ecom360.tenant.application.dto.AssignRolePermissionsRequest;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,9 +25,13 @@ import org.springframework.web.bind.annotation.*;
 public class AdminBusinessMemberController {
 
   private final AdminBusinessMemberService adminBusinessMemberService;
+  private final AdminBusinessRoleService adminBusinessRoleService;
 
-  public AdminBusinessMemberController(AdminBusinessMemberService adminBusinessMemberService) {
+  public AdminBusinessMemberController(
+      AdminBusinessMemberService adminBusinessMemberService,
+      AdminBusinessRoleService adminBusinessRoleService) {
     this.adminBusinessMemberService = adminBusinessMemberService;
+    this.adminBusinessRoleService = adminBusinessRoleService;
   }
 
   @GetMapping("/{businessId}/members")
@@ -51,5 +57,16 @@ public class AdminBusinessMemberController {
       @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(
         adminBusinessMemberService.updateMemberRole(businessId, businessUserId, req, p));
+  }
+
+  @PatchMapping("/{businessId}/roles/{roleId}/permissions")
+  @Operation(summary = "Remplacer les permissions d'un rôle (même effet que Paramètres → Rôles)")
+  public ResponseEntity<AdminBusinessRoleOptionResponse> updateRolePermissions(
+      @PathVariable UUID businessId,
+      @PathVariable UUID roleId,
+      @Valid @RequestBody AssignRolePermissionsRequest req,
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(
+        adminBusinessRoleService.updateRolePermissions(businessId, roleId, req, p));
   }
 }

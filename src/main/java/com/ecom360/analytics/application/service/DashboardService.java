@@ -89,6 +89,8 @@ public class DashboardService {
   public DashboardResponse getDashboard(
       UserPrincipal p, LocalDate periodStart, LocalDate periodEnd, UUID storeId) {
     if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    permissionService.requireAny(
+        p, Permission.SALES_READ, Permission.PRODUCTS_READ, Permission.REPORTS_READ);
     UUID bId = p.businessId();
 
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
@@ -262,6 +264,8 @@ public class DashboardService {
       int page,
       int size) {
     if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    permissionService.requireAny(
+        p, Permission.SALES_READ, Permission.PRODUCTS_READ, Permission.REPORTS_READ);
     UUID bId = p.businessId();
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
     EffectivePeriod ep = resolveEffectivePeriod(bId, periodStart, periodEnd, planOpt);
@@ -273,6 +277,8 @@ public class DashboardService {
   public DashboardSliceResponse<DashboardResponse.LowStockItem> sliceLowStockItems(
       UserPrincipal p, UUID storeId, int page, int size) {
     if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    permissionService.requireAny(
+        p, Permission.SALES_READ, Permission.PRODUCTS_READ, Permission.REPORTS_READ);
     UUID bId = p.businessId();
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
     boolean showLowStock =
