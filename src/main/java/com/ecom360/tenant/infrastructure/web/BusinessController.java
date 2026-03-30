@@ -10,9 +10,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping(ApiConstants.API_BASE + "/business")
@@ -44,5 +46,12 @@ public class BusinessController {
   public ResponseEntity<BusinessProfileResponse> updateLogo(
       @Valid @RequestBody BusinessLogoRequest req, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(businessProfileService.updateLogo(req, p));
+  }
+
+  @PostMapping(value = "/me/logo/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(summary = "Téléverser un fichier image comme logo (plan Business)")
+  public ResponseEntity<BusinessProfileResponse> uploadLogo(
+      @RequestPart("file") MultipartFile file, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(businessProfileService.uploadLogo(file, p));
   }
 }

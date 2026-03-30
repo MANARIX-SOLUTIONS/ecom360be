@@ -12,9 +12,9 @@ spring:
 
   datasource:
     # Single placeholder only — avoids literal ${DB_HOST} when env is not loaded (e.g. systemd)
-#    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-odd-surf-aiz9l39y-pooler.c-4.us-east-1.aws.neon.tech/ecom360pmedb_dev?sslmode=require&channelBinding=require}
-#    username: ${DB_USERNAME:neondb_owner}
-#    password: ${DB_PASSWORD:npg_X17KrjSIoVmD}
+    #    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-odd-surf-aiz9l39y-pooler.c-4.us-east-1.aws.neon.tech/ecom360pmedb_dev?sslmode=require&channelBinding=require}
+    #    username: ${DB_USERNAME:neondb_owner}
+    #    password: ${DB_PASSWORD:npg_X17KrjSIoVmD}
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
@@ -62,7 +62,7 @@ spring:
     connect-retries: 3
     connect-retries-interval: 5
     validate-on-migrate: true
-    out-of-order: true        # allow V8.1 to run after V8 was already applied
+    out-of-order: true # allow V8.1 to run after V8 was already applied
 
   # ── Mail (optional — set MAIL_HOST to enable; when empty, emails are logged only) ──
   mail:
@@ -78,6 +78,11 @@ spring:
           auth: ${MAIL_USERNAME:false}
           starttls:
             enable: ${MAIL_USERNAME:false}
+
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
 
   # ── Jackson ──
   jackson:
@@ -120,7 +125,7 @@ server:
     connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:20000}
     keep-alive-timeout: ${TOMCAT_KEEP_ALIVE_TIMEOUT:30000}
 
-# ── Graceful shutdown ──
+  # ── Graceful shutdown ──
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
@@ -141,6 +146,8 @@ api:
 # ── App (frontend URL for email links) ──
 app:
   url: ${APP_URL:http://localhost:5173}
+  files:
+    business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
   subscription:
     expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
   cors:
