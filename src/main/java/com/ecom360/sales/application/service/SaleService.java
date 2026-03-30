@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -63,30 +64,7 @@ public class SaleService {
       throw new BusinessRuleException(
           "Les ventes à crédit client ne sont pas disponibles au point de vente.");
     }
-    subscriptionService
-        .getPlanForBusiness(p.businessId())
-        .ifPresent(
-            plan -> {
-              if (!plan.isUnlimited(plan.getMaxSalesPerMonth())) {
-                ZoneId zone = ZoneId.systemDefault();
-                LocalDate now = LocalDate.now(zone);
-                Instant start = now.withDayOfMonth(1).atStartOfDay(zone).toInstant();
-                Instant end = now.plusMonths(1).withDayOfMonth(1).atStartOfDay(zone).toInstant();
-                long count =
-                    saleRepo.countByBusinessIdAndCreatedAtBetween(p.businessId(), start, end);
-                if (count >= plan.getMaxSalesPerMonth()) {
-                  throw new BusinessRuleException(
-                      "Limite du plan atteinte : maximum "
-                          + plan.getMaxSalesPerMonth()
-                          + " ventes/mois. Passez à un plan supérieur.");
-                }
-              }
-              if (("wave".equals(req.paymentMethod()) || "orange_money".equals(req.paymentMethod()))
-                  && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
-                throw new BusinessRuleException(
-                    "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
-              }
-            });
+    validateSubscriptionForSale(p.businessId(), req.paymentMethod());
     storeRepo
         .findById(req.storeId())
         .filter(s -> s.belongsTo(p.businessId()))
@@ -96,14 +74,115 @@ public class SaleService {
           .findByBusinessIdAndId(p.businessId(), req.clientId())
           .orElseThrow(() -> new ResourceNotFoundException("Client", req.clientId()));
 
+    List<LineSpec> specs = new ArrayList<>();
+    for (SaleLineRequest lr : req.lines()) {
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(p.businessId(), lr.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
+      specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), prod.getSalePrice()));
+    }
+    return persistSaleFromLineSpecs(
+        p.businessId(),
+        req.storeId(),
+        p.userId(),
+        req.clientId(),
+        req.paymentMethod(),
+        req.discountAmount(),
+        req.amountReceived(),
+        req.note(),
+        specs);
+  }
+
+  /**
+   * Création de vente depuis une intégration commerce (sans contrôle de permission POS). Les lignes
+   * portent les prix issus du site.
+   */
+  @Transactional
+  public SaleResponse createSaleFromImport(
+      UUID businessId,
+      UUID storeId,
+      UUID actingUserId,
+      String paymentMethod,
+      int discountAmount,
+      String note,
+      List<ImportedSaleLine> lines) {
+    validateSubscriptionForSale(businessId, paymentMethod);
+    storeRepo
+        .findById(storeId)
+        .filter(s -> s.belongsTo(businessId))
+        .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+    List<LineSpec> specs = new ArrayList<>();
+    for (ImportedSaleLine il : lines) {
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(businessId, il.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", il.productId()));
+      if (!prod.getStoreId().equals(storeId)) {
+        throw new BusinessRuleException(
+            "Le produit n'appartient pas à la boutique liée à cette connexion commerce.");
+      }
+      String lineName =
+          il.lineLabel() != null && !il.lineLabel().isBlank() ? il.lineLabel() : prod.getName();
+      specs.add(new LineSpec(prod.getId(), lineName, il.quantity(), il.unitPriceMinorUnits()));
+    }
+    return persistSaleFromLineSpecs(
+        businessId,
+        storeId,
+        actingUserId,
+        null,
+        paymentMethod,
+        discountAmount,
+        null,
+        note,
+        specs);
+  }
+
+  private void validateSubscriptionForSale(UUID businessId, String paymentMethod) {
+    subscriptionService
+        .getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!plan.isUnlimited(plan.getMaxSalesPerMonth())) {
+                ZoneId zone = ZoneId.systemDefault();
+                LocalDate now = LocalDate.now(zone);
+                Instant start = now.withDayOfMonth(1).atStartOfDay(zone).toInstant();
+                Instant end = now.plusMonths(1).withDayOfMonth(1).atStartOfDay(zone).toInstant();
+                long count =
+                    saleRepo.countByBusinessIdAndCreatedAtBetween(businessId, start, end);
+                if (count >= plan.getMaxSalesPerMonth()) {
+                  throw new BusinessRuleException(
+                      "Limite du plan atteinte : maximum "
+                          + plan.getMaxSalesPerMonth()
+                          + " ventes/mois. Passez à un plan supérieur.");
+                }
+              }
+              if (("wave".equals(paymentMethod) || "orange_money".equals(paymentMethod))
+                  && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
+                throw new BusinessRuleException(
+                    "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
+              }
+            });
+  }
+
+  private SaleResponse persistSaleFromLineSpecs(
+      UUID businessId,
+      UUID storeId,
+      UUID userId,
+      UUID clientId,
+      String paymentMethod,
+      int discountAmount,
+      Integer amountReceived,
+      String note,
+      List<LineSpec> lineSpecs) {
     Sale sale = new Sale();
-    sale.setBusinessId(p.businessId());
-    sale.setStoreId(req.storeId());
-    sale.setUserId(p.userId());
-    sale.setClientId(req.clientId());
-    sale.setPaymentMethod(req.paymentMethod());
-    sale.setDiscountAmount(req.discountAmount());
-    sale.setNote(req.note());
+    sale.setBusinessId(businessId);
+    sale.setStoreId(storeId);
+    sale.setUserId(userId);
+    sale.setClientId(clientId);
+    sale.setPaymentMethod(paymentMethod);
+    sale.setDiscountAmount(discountAmount);
+    sale.setNote(note);
     sale.setReceiptNumber(generateReceiptNumber());
     sale.setStatus("completed");
     sale.setSubtotal(0);
@@ -111,37 +190,35 @@ public class SaleService {
     sale = saleRepo.save(sale);
 
     int subtotal = 0;
-    for (SaleLineRequest lr : req.lines()) {
-      Product prod =
-          productRepo
-              .findByBusinessIdAndId(p.businessId(), lr.productId())
-              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
-      SaleLine line =
+    for (LineSpec line : lineSpecs) {
+      SaleLine saleLine =
           SaleLine.create(
-              sale.getId(), prod.getId(), prod.getName(), lr.quantity(), prod.getSalePrice());
-      lineRepo.save(line);
-      subtotal += line.getLineTotal();
+              sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
+      lineRepo.save(saleLine);
+      subtotal += saleLine.getLineTotal();
       stockService.updateStockForSale(
-          prod.getId(), req.storeId(), p.userId(), lr.quantity(), sale.getId().toString());
+          line.productId(), storeId, userId, line.quantity(), sale.getId().toString());
     }
 
     sale.setSubtotal(subtotal);
-    sale.setTotal(subtotal - req.discountAmount());
-    if (req.amountReceived() != null) {
-      sale.setAmountReceived(req.amountReceived());
-      sale.setChangeGiven(Math.max(0, req.amountReceived() - sale.getTotal()));
+    sale.setTotal(subtotal - discountAmount);
+    if (amountReceived != null) {
+      sale.setAmountReceived(amountReceived);
+      sale.setChangeGiven(Math.max(0, amountReceived - sale.getTotal()));
     }
     if (sale.isCreditSale()) {
       Client c =
           clientRepo
-              .findByBusinessIdAndId(p.businessId(), req.clientId())
-              .orElseThrow(() -> new ResourceNotFoundException("Client", req.clientId()));
+              .findByBusinessIdAndId(businessId, clientId)
+              .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
       c.addCredit(sale.getTotal());
       clientRepo.save(c);
     }
     sale = saleRepo.save(sale);
     return mapSale(sale);
   }
+
+  private record LineSpec(UUID productId, String lineName, int quantity, int unitPrice) {}
 
   public SaleResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
