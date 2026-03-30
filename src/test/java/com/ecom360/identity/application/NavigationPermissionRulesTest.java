@@ -50,4 +50,14 @@ class NavigationPermissionRulesTest {
     assertThat(m.get("reports")).containsExactly("REPORTS_READ");
     assertThat(m.get("dashboard")).containsExactly("SALES_READ", "PRODUCTS_READ");
   }
+
+  @Test
+  void livreursAcceptsAnyDeliveryCourierPermission() {
+    assertThat(NavigationPermissionRules.asMap().get("livreurs"))
+        .containsExactlyInAnyOrder(
+            "DELIVERY_COURIERS_READ",
+            "DELIVERY_COURIERS_CREATE",
+            "DELIVERY_COURIERS_UPDATE",
+            "DELIVERY_COURIERS_DELETE");
+  }
 }

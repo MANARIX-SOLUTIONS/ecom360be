@@ -21,7 +21,14 @@ public final class NavigationPermissionRules {
     m.put("products", List.of("PRODUCTS_READ"));
     m.put("clients", List.of("CLIENTS_READ"));
     m.put("suppliers", List.of("SUPPLIERS_READ"));
-    m.put("livreurs", List.of("DELIVERY_COURIERS_READ"));
+    /** Au moins une permission livreurs (souvent READ seul n’est pas coché si l’admin donne Créer, etc.). */
+    m.put(
+        "livreurs",
+        List.of(
+            "DELIVERY_COURIERS_READ",
+            "DELIVERY_COURIERS_CREATE",
+            "DELIVERY_COURIERS_UPDATE",
+            "DELIVERY_COURIERS_DELETE"));
     m.put("globalView", List.of("GLOBAL_VIEW_READ"));
     m.put("expenses", List.of("EXPENSES_READ"));
     /** Rapports / exports : permission dédiée (distinct du tableau de bord). */
