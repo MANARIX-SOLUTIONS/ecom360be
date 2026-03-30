@@ -66,6 +66,15 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(d);
   }
 
+  @ExceptionHandler(UnauthorizedCommerceWebhookException.class)
+  public ResponseEntity<ProblemDetail> handleCommerceWebhookUnauthorized(
+      UnauthorizedCommerceWebhookException ex) {
+    ProblemDetail d = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    d.setTitle("Unauthorized");
+    d.setProperty("timestamp", Instant.now());
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(d);
+  }
+
   @ExceptionHandler(JwtAuthenticationException.class)
   public ResponseEntity<ProblemDetail> handleJwt(JwtAuthenticationException ex) {
     log.warn("JWT auth failed: {}", ex.getMessage());

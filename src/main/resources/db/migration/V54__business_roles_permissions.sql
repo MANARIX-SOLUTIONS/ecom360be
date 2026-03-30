@@ -53,22 +53,22 @@ SELECT gen_random_uuid(), b.id, x.code, x.name, true
 FROM business b
 CROSS JOIN (
   VALUES
-    ('ADMIN', 'Administrateur'),
-    ('MANAGER', 'Gestionnaire'),
-    ('SELLER', 'Caissier')
+    ('PROPRIETAIRE', 'Propriétaire'),
+    ('GESTIONNAIRE', 'Gestionnaire'),
+    ('CAISSIER', 'Caissier')
 ) AS x(code, name);
 
 INSERT INTO business_role_permission (role_id, permission_id)
 SELECT br.id, ap.id
 FROM business_role br
 CROSS JOIN app_permission ap
-WHERE br.code = 'ADMIN';
+WHERE br.code = 'PROPRIETAIRE';
 
 INSERT INTO business_role_permission (role_id, permission_id)
 SELECT br.id, ap.id
 FROM business_role br
 JOIN app_permission ap ON ap.code NOT IN ('SUBSCRIPTION_UPDATE', 'BUSINESS_USERS_DELETE')
-WHERE br.code = 'MANAGER';
+WHERE br.code = 'GESTIONNAIRE';
 
 INSERT INTO business_role_permission (role_id, permission_id)
 SELECT br.id, ap.id
@@ -78,23 +78,23 @@ JOIN app_permission ap
     'PRODUCTS_READ','CATEGORIES_READ','STOCK_READ','CLIENTS_READ','STORES_READ',
     'SALES_CREATE','SALES_READ','SALES_UPDATE','SALES_DELETE'
   )
-WHERE br.code = 'SELLER';
+WHERE br.code = 'CAISSIER';
 
 UPDATE business_user bu
 SET role_id = br.id
 FROM business_role br
 WHERE br.business_id = bu.business_id
   AND (
-    (LOWER(TRIM(bu.role)) IN ('proprietaire', 'propriétaire') AND br.code = 'ADMIN')
-    OR (LOWER(TRIM(bu.role)) = 'gestionnaire' AND br.code = 'MANAGER')
-    OR (LOWER(TRIM(bu.role)) = 'caissier' AND br.code = 'SELLER')
+    (LOWER(TRIM(bu.role)) IN ('proprietaire', 'propriétaire') AND br.code = 'PROPRIETAIRE')
+    OR (LOWER(TRIM(bu.role)) = 'gestionnaire' AND br.code = 'GESTIONNAIRE')
+    OR (LOWER(TRIM(bu.role)) = 'caissier' AND br.code = 'CAISSIER')
   );
 
 UPDATE business_user bu
 SET role_id = br.id
 FROM business_role br
 WHERE br.business_id = bu.business_id
-  AND br.code = 'SELLER'
+  AND br.code = 'CAISSIER'
   AND bu.role_id IS NULL;
 
 ALTER TABLE business_user ALTER COLUMN role_id SET NOT NULL;

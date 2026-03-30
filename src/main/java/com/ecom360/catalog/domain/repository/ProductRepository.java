@@ -25,6 +25,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
   boolean existsByBusinessIdAndSku(UUID businessId, String sku);
 
   @Query(
+      """
+      SELECT p FROM Product p
+      WHERE p.businessId = :bid AND p.storeId = :sid
+        AND p.sku IS NOT NULL AND LOWER(TRIM(p.sku)) = LOWER(TRIM(:sku))
+      """)
+  Optional<Product> findByBusinessIdAndStoreIdAndSkuNormalized(
+      @Param("bid") UUID businessId, @Param("sid") UUID storeId, @Param("sku") String sku);
+
+  @Query(
       "SELECT p FROM Product p WHERE p.businessId = :bid AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))")
   Page<Product> searchByBusinessId(@Param("bid") UUID bid, @Param("s") String s, Pageable pageable);
 
