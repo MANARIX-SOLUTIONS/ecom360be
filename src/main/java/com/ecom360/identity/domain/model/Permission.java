@@ -67,6 +67,9 @@ public enum Permission {
   // Vue globale (toutes les boutiques — plan Pro/Business, rôles propriétaire/gestionnaire)
   GLOBAL_VIEW_READ,
 
+  // Rapports (écran Rapports, exports — distinct de SALES_READ)
+  REPORTS_READ,
+
   // Abonnement
   SUBSCRIPTION_READ,
   SUBSCRIPTION_UPDATE,

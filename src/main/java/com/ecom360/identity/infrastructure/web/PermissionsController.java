@@ -1,17 +1,15 @@
 package com.ecom360.identity.infrastructure.web;
 
-import com.ecom360.identity.application.service.RolePermissionService;
-import com.ecom360.identity.domain.model.Permission;
+import com.ecom360.identity.application.dto.PermissionCatalogItem;
+import com.ecom360.identity.application.dto.PermissionsResponse;
+import com.ecom360.identity.application.service.PermissionsResponseBuilder;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
-import com.ecom360.tenant.domain.model.AppPermission;
 import com.ecom360.tenant.domain.repository.AppPermissionRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,34 +22,34 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class PermissionsController {
 
-  private final RolePermissionService permissionService;
+  private final PermissionsResponseBuilder permissionsResponseBuilder;
   private final AppPermissionRepository appPermissionRepository;
 
   public PermissionsController(
-      RolePermissionService permissionService, AppPermissionRepository appPermissionRepository) {
-    this.permissionService = permissionService;
+      PermissionsResponseBuilder permissionsResponseBuilder,
+      AppPermissionRepository appPermissionRepository) {
+    this.permissionsResponseBuilder = permissionsResponseBuilder;
     this.appPermissionRepository = appPermissionRepository;
   }
 
   @GetMapping
-  @Operation(summary = "Lister toutes les permissions (catalogue)")
-  public List<String> listPermissionCodes() {
-    return appPermissionRepository.findAllByOrderByCodeAsc().stream()
-        .map(AppPermission::getCode)
+  @Operation(summary = "Catalogue des permissions (codes, libellés, regroupement)")
+  public List<PermissionCatalogItem> listPermissionCatalog() {
+    return appPermissionRepository.findAllByOrderBySortOrderAscCodeAsc().stream()
+        .map(
+            ap ->
+                new PermissionCatalogItem(
+                    ap.getCode(),
+                    ap.getLabel(),
+                    ap.getCategory() != null ? ap.getCategory() : "other",
+                    ap.getSortOrder()))
         .toList();
   }
 
   @GetMapping("/me")
-  @Operation(summary = "Get current user permissions")
+  @Operation(summary = "Permissions effectives et matrice navigation")
   public ResponseEntity<PermissionsResponse> getMyPermissions(
       @AuthenticationPrincipal UserPrincipal p) {
-    List<String> permissions =
-        Arrays.stream(Permission.values())
-            .filter(perm -> permissionService.can(p, perm))
-            .map(Enum::name)
-            .collect(Collectors.toList());
-    return ResponseEntity.ok(new PermissionsResponse(p.role(), permissions));
+    return ResponseEntity.ok(permissionsResponseBuilder.build(p));
   }
-
-  public record PermissionsResponse(String role, List<String> permissions) {}
 }

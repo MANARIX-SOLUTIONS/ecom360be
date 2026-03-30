@@ -34,8 +34,8 @@ public class BusinessRoleBootstrapService {
           Permission.STORES_READ,
           Permission.SALES_CREATE,
           Permission.SALES_READ,
-          Permission.SALES_UPDATE,
-          Permission.SALES_DELETE);
+          Permission.SALES_DELETE,
+          Permission.REPORTS_READ);
 
   private final BusinessRoleRepository businessRoleRepository;
   private final AppPermissionRepository appPermissionRepository;

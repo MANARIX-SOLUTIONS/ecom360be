@@ -1,5 +1,6 @@
 package com.ecom360.admin.application.dto;
 
+import java.util.List;
 import java.util.UUID;
 
 public record AdminBusinessMemberResponse(
@@ -9,4 +10,5 @@ public record AdminBusinessMemberResponse(
     String email,
     String roleCode,
     String roleName,
-    boolean active) {}
+    boolean active,
+    List<String> permissions) {}

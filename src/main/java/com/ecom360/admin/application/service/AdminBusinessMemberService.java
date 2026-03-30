@@ -3,6 +3,7 @@ package com.ecom360.admin.application.service;
 import com.ecom360.admin.application.dto.AdminBusinessMemberResponse;
 import com.ecom360.admin.application.dto.AdminBusinessRoleOptionResponse;
 import com.ecom360.admin.application.dto.AdminUpdateMemberRoleRequest;
+import com.ecom360.audit.application.service.AuditLogService;
 import com.ecom360.identity.domain.model.User;
 import com.ecom360.identity.domain.repository.UserRepository;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
@@ -11,9 +12,12 @@ import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.tenant.domain.model.BusinessRole;
 import com.ecom360.tenant.domain.model.BusinessUser;
 import com.ecom360.tenant.domain.repository.BusinessRepository;
+import com.ecom360.tenant.domain.repository.BusinessRolePermissionRepository;
 import com.ecom360.tenant.domain.repository.BusinessRoleRepository;
 import com.ecom360.tenant.domain.repository.BusinessUserRepository;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -25,17 +29,23 @@ public class AdminBusinessMemberService {
   private final BusinessRepository businessRepository;
   private final BusinessUserRepository businessUserRepository;
   private final BusinessRoleRepository businessRoleRepository;
+  private final BusinessRolePermissionRepository businessRolePermissionRepository;
   private final UserRepository userRepository;
+  private final AuditLogService auditLogService;
 
   public AdminBusinessMemberService(
       BusinessRepository businessRepository,
       BusinessUserRepository businessUserRepository,
       BusinessRoleRepository businessRoleRepository,
-      UserRepository userRepository) {
+      BusinessRolePermissionRepository businessRolePermissionRepository,
+      UserRepository userRepository,
+      AuditLogService auditLogService) {
     this.businessRepository = businessRepository;
     this.businessUserRepository = businessUserRepository;
     this.businessRoleRepository = businessRoleRepository;
+    this.businessRolePermissionRepository = businessRolePermissionRepository;
     this.userRepository = userRepository;
+    this.auditLogService = auditLogService;
   }
 
   public List<AdminBusinessMemberResponse> listMembers(UUID businessId, UserPrincipal p) {
@@ -57,7 +67,11 @@ public class AdminBusinessMemberService {
         .map(
             r ->
                 new AdminBusinessRoleOptionResponse(
-                    r.getId(), r.getCode(), r.getName(), r.isSystem()))
+                    r.getId(),
+                    r.getCode(),
+                    r.getName(),
+                    r.isSystem(),
+                    permissionCodesSorted(r.getId())))
         .toList();
   }
 
@@ -75,6 +89,10 @@ public class AdminBusinessMemberService {
     if (!bu.getBusinessId().equals(businessId)) {
       throw new ResourceNotFoundException("BusinessUser", businessUserId);
     }
+    User memberUser =
+        userRepository
+            .findById(bu.getUserId())
+            .orElseThrow(() -> new ResourceNotFoundException("User", bu.getUserId()));
     String code = req.roleCode().trim().toUpperCase();
     BusinessRole newRole =
         businessRoleRepository
@@ -96,7 +114,16 @@ public class AdminBusinessMemberService {
 
     bu.setBusinessRole(newRole);
     businessUserRepository.save(bu);
-    return toMemberResponse(businessUserRepository.findByIdWithRole(businessUserId).orElseThrow());
+    AdminBusinessMemberResponse out =
+        toMemberResponse(businessUserRepository.findByIdWithRole(businessUserId).orElseThrow());
+    Map<String, Object> auditChanges = new LinkedHashMap<>();
+    auditChanges.put("previousRoleCode", currentCode);
+    auditChanges.put("newRoleCode", newRole.getCode());
+    auditChanges.put("memberEmail", memberUser.getEmail());
+    auditChanges.put("source", "platform_admin");
+    auditLogService.logAsync(
+        businessId, p.userId(), "UPDATE", "BusinessUser", businessUserId, auditChanges);
+    return out;
   }
 
   private AdminBusinessMemberResponse toMemberResponse(BusinessUser bu) {
@@ -111,7 +138,14 @@ public class AdminBusinessMemberService {
         u.getEmail(),
         bu.getBusinessRole().getCode(),
         bu.getBusinessRole().getName(),
-        bu.isActive());
+        bu.isActive(),
+        permissionCodesSorted(bu.getBusinessRole().getId()));
+  }
+
+  private List<String> permissionCodesSorted(UUID roleId) {
+    return businessRolePermissionRepository.findPermissionCodesByRoleId(roleId).stream()
+        .sorted()
+        .toList();
   }
 
   private static void requirePlatformAdmin(UserPrincipal p) {

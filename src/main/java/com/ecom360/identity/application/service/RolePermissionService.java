@@ -27,6 +27,20 @@ public class RolePermissionService {
     }
   }
 
+  /** Au moins une des permissions listées doit être accordée. */
+  public void requireAny(UserPrincipal p, Permission... perms) {
+    if (perms.length == 0) {
+      throw new IllegalArgumentException("perms must not be empty");
+    }
+    for (Permission perm : perms) {
+      if (can(p, perm)) {
+        return;
+      }
+    }
+    throw new AccessDeniedException(
+        "Accès refusé : au moins une des permissions attendues est requise pour votre rôle");
+  }
+
   /** Retourne true si l'utilisateur a la permission. */
   public boolean can(UserPrincipal p, Permission perm) {
     if (p == null) return false;
