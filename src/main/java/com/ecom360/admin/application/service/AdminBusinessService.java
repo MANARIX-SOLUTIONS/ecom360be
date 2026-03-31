@@ -1,8 +1,10 @@
 package com.ecom360.admin.application.service;
 
+import com.ecom360.admin.application.dto.AdminBusinessSubscriptionInfo;
 import com.ecom360.admin.application.dto.AdminBusinessResponse;
 import com.ecom360.admin.application.dto.AdminCreateBusinessRequest;
 import com.ecom360.admin.application.dto.AdminPlanItem;
+import com.ecom360.admin.application.dto.AdminRenewSubscriptionRequest;
 import com.ecom360.admin.application.dto.AdminUpdateBusinessRequest;
 import com.ecom360.identity.domain.model.User;
 import com.ecom360.identity.domain.repository.UserRepository;
@@ -28,9 +30,12 @@ import com.ecom360.tenant.domain.repository.SubscriptionRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -97,11 +102,15 @@ public class AdminBusinessService {
 
     List<UUID> bizIds = businesses.getContent().stream().map(Business::getId).toList();
     Map<UUID, String> ownerMap = loadOwners(bizIds);
-    Map<UUID, String> planMap = loadPlans(bizIds);
+    Map<UUID, Subscription> latestSubs = loadLatestSubscriptions(bizIds);
+    Map<UUID, String> planMap = buildPlanNamesForBusinesses(bizIds, latestSubs);
+    Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap =
+        buildSubscriptionInfos(latestSubs);
     Map<UUID, Integer> storesMap = loadStoresCount(bizIds);
     Map<UUID, Long> revenueMap = loadMonthlyRevenue(bizIds);
 
-    return businesses.map(b -> map(b, ownerMap, planMap, storesMap, revenueMap));
+    return businesses.map(
+        b -> map(b, ownerMap, planMap, subscriptionInfoMap, storesMap, revenueMap));
   }
 
   public AdminBusinessResponse getById(UUID businessId, UserPrincipal p) {
@@ -111,10 +120,13 @@ public class AdminBusinessService {
             .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     List<UUID> bizIds = List.of(b.getId());
     Map<UUID, String> ownerMap = loadOwners(bizIds);
-    Map<UUID, String> planMap = loadPlans(bizIds);
+    Map<UUID, Subscription> latestSubs = loadLatestSubscriptions(bizIds);
+    Map<UUID, String> planMap = buildPlanNamesForBusinesses(bizIds, latestSubs);
+    Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap =
+        buildSubscriptionInfos(latestSubs);
     Map<UUID, Integer> storesMap = loadStoresCount(bizIds);
     Map<UUID, Long> revenueMap = loadMonthlyRevenue(bizIds);
-    return map(b, ownerMap, planMap, storesMap, revenueMap);
+    return map(b, ownerMap, planMap, subscriptionInfoMap, storesMap, revenueMap);
   }
 
   @Transactional
@@ -181,6 +193,110 @@ public class AdminBusinessService {
     }
     b = businessRepository.save(b);
     return getById(b.getId(), p);
+  }
+
+  /**
+   * Renouvelle l'abonnement : une période supplémentaire (mensuelle ou annuelle). Si l'abonnement
+   * payant est encore actif, la nouvelle période commence à la fin de la période courante. Sinon
+   * (expiré, annulé, essai) la période commence aujourd'hui ; l'essai est converti en payant dès
+   * aujourd'hui.
+   */
+  @Transactional
+  public void renewSubscription(
+      UUID businessId, AdminRenewSubscriptionRequest req, UserPrincipal p) {
+    Objects.requireNonNull(p);
+    businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+
+    Subscription latest =
+        subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(businessId).orElse(null);
+
+    String planSlug;
+    String billingCycleRaw;
+    if (req != null
+        && req.planSlug() != null
+        && !req.planSlug().isBlank()) {
+      planSlug = req.planSlug().trim();
+      billingCycleRaw =
+          req.billingCycle() != null && !req.billingCycle().isBlank()
+              ? req.billingCycle().trim()
+              : "monthly";
+    } else if (latest != null) {
+      Plan lp =
+          planRepository
+              .findById(latest.getPlanId())
+              .orElseThrow(() -> new ResourceNotFoundException("Plan", latest.getPlanId()));
+      planSlug = lp.getSlug();
+      billingCycleRaw =
+          req != null && req.billingCycle() != null && !req.billingCycle().isBlank()
+              ? req.billingCycle().trim()
+              : latest.getBillingCycle();
+    } else {
+      throw new BusinessRuleException(
+          "Aucun abonnement existant — précisez un plan ou utilisez « Changer le plan ».");
+    }
+
+    Plan targetPlan =
+        planRepository
+            .findBySlug(planSlug)
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    if (!Boolean.TRUE.equals(targetPlan.getIsActive())) {
+      throw new IllegalArgumentException("Plan is not active: " + planSlug);
+    }
+
+    int storeCount = storeRepository.findByBusinessId(businessId).size();
+    if (!targetPlan.isUnlimited(targetPlan.getMaxStores())
+        && storeCount > targetPlan.getMaxStores()) {
+      throw new BusinessRuleException(
+          "Cette entreprise compte "
+              + storeCount
+              + " magasin(s). Le plan « "
+              + targetPlan.getName()
+              + " » autorise au maximum "
+              + targetPlan.getMaxStores()
+              + " magasin(s). Réduisez le nombre de boutiques ou choisissez un plan supérieur.");
+    }
+
+    String cycle =
+        "yearly".equalsIgnoreCase(billingCycleRaw != null ? billingCycleRaw : "") ? "yearly" : "monthly";
+    LocalDate today = LocalDate.now();
+    LocalDate anchor;
+    if (latest == null) {
+      anchor = today;
+    } else if (latest.isTrialing()) {
+      anchor = today;
+    } else if (SubscriptionStatus.ACTIVE.equals(latest.getStatus())) {
+      LocalDate periodEnd = latest.getCurrentPeriodEnd();
+      anchor = periodEnd.isBefore(today) ? today : periodEnd;
+    } else {
+      anchor = today;
+    }
+
+    if (latest != null && SubscriptionStatus.ACCESS_GRANTING.contains(latest.getStatus())) {
+      latest.cancelImmediate();
+      subscriptionRepository.save(latest);
+    }
+
+    LocalDate periodEnd = "yearly".equals(cycle) ? anchor.plusYears(1) : anchor.plusMonths(1);
+    Subscription sub = new Subscription();
+    sub.setBusinessId(businessId);
+    sub.setPlanId(targetPlan.getId());
+    sub.setBillingCycle(cycle);
+    sub.setStatus(SubscriptionStatus.ACTIVE);
+    sub.setCurrentPeriodStart(anchor);
+    sub.setCurrentPeriodEnd(periodEnd);
+    subscriptionRepository.save(sub);
+
+    businessRepository
+        .findById(businessId)
+        .ifPresent(
+            biz -> {
+              biz.activate();
+              biz.setTrialEndsAt(null);
+              biz.setTrialUsedAt(Instant.now());
+              businessRepository.save(biz);
+            });
   }
 
   /**
@@ -303,22 +419,63 @@ public class AdminBusinessService {
                 (a, b) -> a));
   }
 
-  private Map<UUID, String> loadPlans(List<UUID> bizIds) {
-    return bizIds.stream()
-        .map(
-            bizId ->
-                subscriptionRepository.findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
-                    bizId, List.of("active", "trialing")))
-        .filter(Optional::isPresent)
-        .map(Optional::get)
+  /** Dernier abonnement créé par entreprise (tous statuts). */
+  private Map<UUID, Subscription> loadLatestSubscriptions(List<UUID> bizIds) {
+    if (bizIds.isEmpty()) {
+      return Map.of();
+    }
+    List<Subscription> all = subscriptionRepository.findByBusinessIdIn(bizIds);
+    return all.stream()
         .collect(
             Collectors.toMap(
                 Subscription::getBusinessId,
-                sub -> {
-                  Plan plan = planRepository.findById(sub.getPlanId()).orElse(null);
-                  return plan != null ? plan.getName() : "-";
-                },
-                (a, b) -> a));
+                s -> s,
+                (a, b) -> a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b));
+  }
+
+  private Map<UUID, String> buildPlanNamesForBusinesses(
+      List<UUID> bizIds, Map<UUID, Subscription> latestSubs) {
+    Map<UUID, String> planMap = new HashMap<>();
+    for (UUID id : bizIds) {
+      Subscription s = latestSubs.get(id);
+      planMap.put(id, s == null ? "-" : planNameForSubscription(s));
+    }
+    return planMap;
+  }
+
+  private String planNameForSubscription(Subscription sub) {
+    return planRepository.findById(sub.getPlanId()).map(Plan::getName).orElse("-");
+  }
+
+  private Map<UUID, AdminBusinessSubscriptionInfo> buildSubscriptionInfos(
+      Map<UUID, Subscription> latestSubs) {
+    Map<UUID, AdminBusinessSubscriptionInfo> m = new HashMap<>();
+    for (Map.Entry<UUID, Subscription> e : latestSubs.entrySet()) {
+      m.put(e.getKey(), toSubscriptionInfo(e.getValue()));
+    }
+    return m;
+  }
+
+  private AdminBusinessSubscriptionInfo toSubscriptionInfo(Subscription sub) {
+    Plan plan =
+        planRepository
+            .findById(sub.getPlanId())
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
+    LocalDate today = LocalDate.now();
+    long daysRemaining = ChronoUnit.DAYS.between(today, sub.getCurrentPeriodEnd());
+    if (daysRemaining < 0) {
+      daysRemaining = 0;
+    }
+    return new AdminBusinessSubscriptionInfo(
+        plan.getSlug(),
+        plan.getName(),
+        sub.getBillingCycle(),
+        sub.getStatus(),
+        sub.getCurrentPeriodStart(),
+        sub.getCurrentPeriodEnd(),
+        daysRemaining,
+        Boolean.TRUE.equals(sub.getCancelAtPeriodEnd()),
+        sub.isTrialing());
   }
 
   private Map<UUID, Integer> loadStoresCount(List<UUID> bizIds) {
@@ -344,6 +501,7 @@ public class AdminBusinessService {
       Business b,
       Map<UUID, String> ownerMap,
       Map<UUID, String> planMap,
+      Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap,
       Map<UUID, Integer> storesMap,
       Map<UUID, Long> revenueMap) {
     long revenue = revenueMap.getOrDefault(b.getId(), 0L);
@@ -359,6 +517,7 @@ public class AdminBusinessService {
         storesMap.getOrDefault(b.getId(), 0),
         formatRevenue(revenue),
         b.getCreatedAt(),
-        b.getTrialEndsAt());
+        b.getTrialEndsAt(),
+        subscriptionInfoMap.get(b.getId()));
   }
 }

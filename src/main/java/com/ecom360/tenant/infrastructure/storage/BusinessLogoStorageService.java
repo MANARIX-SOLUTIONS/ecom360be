@@ -30,7 +30,8 @@ public class BusinessLogoStorageService {
   private static final Set<String> ALLOWED_TYPES =
       Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
 
-  private static final long MAX_BYTES = 2 * 1024 * 1024;
+  /** Must stay in sync with {@code spring.servlet.multipart.max-file-size}. */
+  private static final long MAX_BYTES = 8 * 1024 * 1024;
 
   private final Path root;
 
@@ -59,7 +60,7 @@ public class BusinessLogoStorageService {
       throw new DomainException("Fichier vide");
     }
     if (file.getSize() > MAX_BYTES) {
-      throw new DomainException("Image trop volumineuse (max. 2 Mo)");
+      throw new DomainException("Image trop volumineuse (max. 8 Mo)");
     }
     String contentType = file.getContentType();
     if (contentType == null || !ALLOWED_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
