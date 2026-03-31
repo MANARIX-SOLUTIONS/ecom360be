@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SubscriptionService {
 
-  private static final int TRIAL_DAYS = 30;
+  private static final int TRIAL_DAYS = 14;
 
   private final SubscriptionRepository subscriptionRepository;
   private final PlanRepository planRepository;
