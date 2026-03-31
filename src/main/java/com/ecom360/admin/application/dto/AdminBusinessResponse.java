@@ -16,4 +16,5 @@ public record AdminBusinessResponse(
     int storesCount,
     String revenue,
     Instant createdAt,
-    LocalDate trialEndsAt) {}
+    LocalDate trialEndsAt,
+    AdminBusinessSubscriptionInfo subscription) {}

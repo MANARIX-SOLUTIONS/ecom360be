@@ -1,6 +1,7 @@
 package com.ecom360.admin.infrastructure.web;
 
 import com.ecom360.admin.application.dto.AdminAssignPlanRequest;
+import com.ecom360.admin.application.dto.AdminRenewSubscriptionRequest;
 import com.ecom360.admin.application.dto.AdminBusinessResponse;
 import com.ecom360.admin.application.dto.AdminCreateBusinessRequest;
 import com.ecom360.admin.application.dto.AdminPlanItem;
@@ -104,6 +105,20 @@ public class AdminBusinessController {
             ? req.billingCycle()
             : "monthly";
     adminBusinessService.assignPlan(id, req.planSlug(), cycle, p);
+    return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/{id}/subscription/renew")
+  @Operation(
+      summary = "Renouveler l'abonnement (admin)",
+      description =
+          "Ajoute une période de facturation : empilée après la fin de période si abonnement payant"
+              + " actif ; sinon à partir d'aujourd'hui. Essai → passage payant immédiat.")
+  public ResponseEntity<Void> renewSubscription(
+      @PathVariable UUID id,
+      @Valid @RequestBody(required = false) AdminRenewSubscriptionRequest req,
+      @AuthenticationPrincipal UserPrincipal p) {
+    adminBusinessService.renewSubscription(id, req, p);
     return ResponseEntity.noContent().build();
   }
 
