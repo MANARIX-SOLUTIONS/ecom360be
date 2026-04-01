@@ -71,6 +71,15 @@ public class SaleController {
                 PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending()))));
   }
 
+  @PutMapping("/{id}")
+  @Operation(summary = "Update sale (lines, discount, payment — receipt number unchanged)")
+  public ResponseEntity<SaleResponse> update(
+      @PathVariable UUID id,
+      @Valid @RequestBody SaleRequest r,
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(svc.updateSale(id, r, p));
+  }
+
   @PostMapping("/{id}/void")
   @Operation(summary = "Void sale")
   public ResponseEntity<SaleResponse> voidSale(
