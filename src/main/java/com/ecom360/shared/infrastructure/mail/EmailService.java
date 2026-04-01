@@ -51,6 +51,45 @@ public class EmailService {
     send(to, subject, body);
   }
 
+  /** Accusé de réception d'une demande de démo (PME / Afrique : délai annoncé). */
+  public void sendDemoRequestReceivedEmail(String to, String fullName, String businessName) {
+    String subject = "360 PME Commerce — Demande de démo bien reçue";
+    String body =
+        """
+            Bonjour %s,
+
+            Nous avons bien reçu votre demande de démo pour « %s ».
+
+            Notre équipe la traite sous 48 h ouvrées (souvent sous 24 h). Vous recevrez un e-mail dès que votre accès sera activé.
+
+            Vous pourrez alors définir votre mot de passe via le lien reçu et profiter de 14 jours d'essai gratuit.
+
+            — L'équipe 360 PME Commerce
+            """
+            .formatted(fullName, businessName);
+    send(to, subject, body);
+  }
+
+  /** Refus de demande démo (motif optionnel). */
+  public void sendDemoRequestRejectedEmail(String to, String fullName, String reasonOrNull) {
+    String subject = "360 PME Commerce — Suite à votre demande de démo";
+    String extra =
+        reasonOrNull != null && !reasonOrNull.isBlank()
+            ? "\n\nMotif : " + reasonOrNull + "\n"
+            : "\n";
+    String body =
+        """
+            Bonjour %s,
+
+            Nous ne pouvons pas donner suite à votre demande de démo pour le moment.%s
+            Vous pouvez nous écrire pour plus d'informations.
+
+            — L'équipe 360 PME Commerce
+            """
+            .formatted(fullName, extra);
+    send(to, subject, body);
+  }
+
   public void sendInvitationEmail(
       String to, String fullName, String businessName, String setPasswordLink) {
     String subject = "360 PME Commerce — Invitation à rejoindre " + businessName;

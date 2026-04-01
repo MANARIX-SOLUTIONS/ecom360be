@@ -2,6 +2,7 @@ package com.ecom360.identity.infrastructure.web;
 
 import com.ecom360.identity.application.dto.*;
 import com.ecom360.identity.application.service.AuthService;
+import com.ecom360.identity.application.service.DemoRequestService;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,13 +15,15 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping(ApiConstants.API_BASE + "/auth")
-@Tag(name = "Authentication", description = "User authentication and registration")
+@Tag(name = "Authentication", description = "User authentication and demo signup")
 public class AuthController {
 
   private final AuthService authService;
+  private final DemoRequestService demoRequestService;
 
-  public AuthController(AuthService authService) {
+  public AuthController(AuthService authService, DemoRequestService demoRequestService) {
     this.authService = authService;
+    this.demoRequestService = demoRequestService;
   }
 
   @PostMapping("/login")
@@ -29,10 +32,11 @@ public class AuthController {
     return ResponseEntity.ok(authService.login(request));
   }
 
-  @PostMapping("/register")
-  @Operation(summary = "Register new user and business")
-  public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-    return ResponseEntity.status(201).body(authService.register(request));
+  @PostMapping("/demo-request")
+  @Operation(summary = "Request demo access — pending admin approval (no JWT)")
+  public ResponseEntity<DemoRequestAckResponse> demoRequest(
+      @Valid @RequestBody DemoRequestSubmitRequest request) {
+    return ResponseEntity.status(202).body(demoRequestService.submit(request));
   }
 
   @PostMapping("/refresh")
