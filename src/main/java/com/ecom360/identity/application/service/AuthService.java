@@ -125,24 +125,34 @@ public class AuthService {
         active.getBusinessRole().getId());
   }
 
+  /**
+   * Crée utilisateur + entreprise + essai après validation admin d'une demande de démo. Si {@code
+   * passwordHashOrNull} est vide, un mot de passe aléatoire est posé (le demandeur utilisera le lien
+   * « définir le mot de passe »).
+   */
   @Transactional
-  public AuthResponse register(RegisterRequest request) {
-    if (userRepository.existsByEmail(request.email())) {
-      throw new ResourceAlreadyExistsException("User", request.email());
+  public ProvisionedTenant provisionTenantAfterDemoApproval(
+      String fullName,
+      String email,
+      String passwordHashOrNull,
+      String phone,
+      String businessName) {
+    if (userRepository.existsByEmail(email)) {
+      throw new ResourceAlreadyExistsException("User", email);
     }
-    if (businessRepository.existsByEmail(request.email())) {
-      throw new ResourceAlreadyExistsException("Business", request.email());
+    if (businessRepository.existsByEmail(email)) {
+      throw new ResourceAlreadyExistsException("Business", email);
     }
 
-    User user =
-        User.create(
-            request.fullName(),
-            request.email(),
-            passwordEncoder.encode(request.password()),
-            request.phone());
+    String hash =
+        passwordHashOrNull != null && !passwordHashOrNull.isBlank()
+            ? passwordHashOrNull
+            : passwordEncoder.encode(java.util.UUID.randomUUID().toString());
+
+    User user = User.create(fullName, email, hash, phone);
     user = userRepository.save(user);
 
-    Business business = Business.create(request.businessName(), request.email());
+    Business business = Business.create(businessName, email);
     business = businessRepository.save(business);
 
     businessRoleBootstrapService.ensureDefaultRolesForBusiness(business.getId());
@@ -161,9 +171,15 @@ public class AuthService {
         "REGISTER",
         "Auth",
         user.getId(),
-        java.util.Map.of("email", user.getEmail(), "businessName", business.getName()));
+        java.util.Map.of(
+            "email",
+            user.getEmail(),
+            "businessName",
+            business.getName(),
+            "source",
+            "demo_request"));
 
-    return buildAuthResponse(user, business.getId(), adminRole.getCode(), adminRole.getId());
+    return new ProvisionedTenant(business.getId(), user.getId());
   }
 
   public AuthResponse refreshToken(RefreshTokenRequest request) {

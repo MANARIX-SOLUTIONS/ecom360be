@@ -45,7 +45,7 @@ public class SecurityConfig {
 
   private static final String[] PUBLIC_PATHS = {
     ApiConstants.API_BASE + "/auth/login",
-    ApiConstants.API_BASE + "/auth/register",
+    ApiConstants.API_BASE + "/auth/demo-request",
     ApiConstants.API_BASE + "/auth/refresh",
     ApiConstants.API_BASE + "/auth/forgot-password",
     ApiConstants.API_BASE + "/auth/reset-password",
