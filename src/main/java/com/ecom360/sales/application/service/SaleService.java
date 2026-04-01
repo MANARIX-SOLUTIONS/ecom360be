@@ -165,6 +165,20 @@ public class SaleService {
             });
   }
 
+  /** Wave / Orange Money — sans contrôle du quota mensuel de ventes (réservé aux mises à jour). */
+  private void validatePlanPaymentMethodsOnly(UUID businessId, String paymentMethod) {
+    subscriptionService
+        .getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (("wave".equals(paymentMethod) || "orange_money".equals(paymentMethod))
+                  && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
+                throw new BusinessRuleException(
+                    "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
+              }
+            });
+  }
+
   private SaleResponse persistSaleFromLineSpecs(
       UUID businessId,
       UUID storeId,
@@ -245,6 +259,131 @@ public class SaleService {
     Instant from = subscriptionService.clampSaleHistoryFrom(p.businessId(), periodStart);
     Page<Sale> page = saleRepo.findFiltered(p.businessId(), storeId, status, from, periodEnd, pg);
     return page.map(this::mapSale);
+  }
+
+  /**
+   * Met à jour une vente validée (lignes, remise, paiement, note). Le numéro de reçu est conservé.
+   * Ajuste le stock et le solde crédit client comme pour une annulation suivie d'une nouvelle vente.
+   */
+  @Transactional
+  public SaleResponse updateSale(UUID id, SaleRequest req, UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.SALES_UPDATE);
+    Sale sale =
+        saleRepo
+            .findByBusinessIdAndId(p.businessId(), id)
+            .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
+    if (subscriptionService.isBeforeDataRetention(p.businessId(), sale.getCreatedAt())) {
+      throw new BusinessRuleException(
+          "Cette vente est hors de la période d'historique de votre plan.");
+    }
+    if (!sale.isCompleted()) {
+      throw new BusinessRuleException("Seules les ventes validées peuvent être modifiées.");
+    }
+    if (!sale.getStoreId().equals(req.storeId())) {
+      throw new BusinessRuleException("La boutique de la vente ne peut pas être changée.");
+    }
+    if ("credit".equals(req.paymentMethod())) {
+      subscriptionService
+          .getPlanForBusiness(p.businessId())
+          .ifPresent(
+              plan -> {
+                if (!Boolean.TRUE.equals(plan.getFeatureClientCredits())) {
+                  throw new BusinessRuleException(
+                      "Crédits clients non inclus dans votre plan. Passez à un plan supérieur.");
+                }
+              });
+      if (req.clientId() == null) {
+        throw new BusinessRuleException("Client obligatoire pour une vente à crédit.");
+      }
+    }
+    storeRepo
+        .findById(req.storeId())
+        .filter(s -> s.belongsTo(p.businessId()))
+        .orElseThrow(() -> new ResourceNotFoundException("Store", req.storeId()));
+    if (req.clientId() != null) {
+      clientRepo
+          .findByBusinessIdAndId(p.businessId(), req.clientId())
+          .orElseThrow(() -> new ResourceNotFoundException("Client", req.clientId()));
+    }
+    validatePlanPaymentMethodsOnly(p.businessId(), req.paymentMethod());
+
+    List<SaleLine> oldLines = lineRepo.findBySaleId(sale.getId());
+    for (SaleLine line : oldLines) {
+      stockService.updateStockForPurchase(
+          line.getProductId(),
+          sale.getStoreId(),
+          p.userId(),
+          line.getQuantity(),
+          "EDIT-REV-" + sale.getReceiptNumber());
+    }
+    if (sale.isCreditSale()) {
+        Sale finalSale = sale;
+        Client oldClient =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), sale.getClientId())
+              .orElseThrow(() -> new ResourceNotFoundException("Client", finalSale.getClientId()));
+      oldClient.deductCredit(sale.getTotal());
+      clientRepo.save(oldClient);
+    }
+
+    lineRepo.deleteAll(oldLines);
+
+    List<LineSpec> specs = new ArrayList<>();
+    for (SaleLineRequest lr : req.lines()) {
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(p.businessId(), lr.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
+      specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), prod.getSalePrice()));
+    }
+
+    int subtotal = 0;
+    for (LineSpec line : specs) {
+      SaleLine saleLine =
+          SaleLine.create(
+              sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
+      lineRepo.save(saleLine);
+      subtotal += saleLine.getLineTotal();
+      stockService.updateStockForSale(
+          line.productId(),
+          sale.getStoreId(),
+          p.userId(),
+          line.quantity(),
+          sale.getId().toString());
+    }
+
+    int discountAmount = req.discountAmount() != null ? req.discountAmount() : 0;
+    if (discountAmount > subtotal) {
+      throw new BusinessRuleException("La remise ne peut pas dépasser le sous-total.");
+    }
+    int newTotal = subtotal - discountAmount;
+
+    sale.setClientId(req.clientId());
+    sale.setPaymentMethod(req.paymentMethod());
+    sale.setDiscountAmount(discountAmount);
+    sale.setSubtotal(subtotal);
+    sale.setTotal(newTotal);
+    sale.setNote(req.note());
+    if (req.amountReceived() != null) {
+      sale.setAmountReceived(req.amountReceived());
+      sale.setChangeGiven(Math.max(0, req.amountReceived() - newTotal));
+    } else {
+      sale.setAmountReceived(null);
+      sale.setChangeGiven(null);
+    }
+
+    if (sale.isCreditSale()) {
+      Client c =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), req.clientId())
+              .orElseThrow(() -> new ResourceNotFoundException("Client", req.clientId()));
+      c.addCredit(newTotal);
+      clientRepo.save(c);
+    }
+
+    sale = saleRepo.save(sale);
+    return mapSale(sale);
   }
 
   @Transactional
