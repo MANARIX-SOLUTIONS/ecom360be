@@ -10,7 +10,7 @@ plugins {
 // Flyway Gradle plugin needs PostgreSQL driver on its classpath
 buildscript {
     dependencies {
-        classpath("org.postgresql:postgresql:42.7.4")
+        classpath("org.postgresql:postgresql:42.7.10")
         classpath("org.flywaydb:flyway-database-postgresql:10.21.0")
     }
 }
