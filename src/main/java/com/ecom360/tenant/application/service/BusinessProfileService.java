@@ -34,7 +34,13 @@ public class BusinessProfileService {
   public BusinessProfileResponse get(UserPrincipal p) {
     Business b = findBusiness(p);
     return new BusinessProfileResponse(
-        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
+        b.getId(),
+        b.getName(),
+        b.getEmail(),
+        b.getPhone(),
+        b.getAddress(),
+        b.getLogoUrl(),
+        b.getCreatedAt());
   }
 
   @Transactional
@@ -61,7 +67,13 @@ public class BusinessProfileService {
     b.setAddress(req.address());
     b = businessRepository.save(b);
     return new BusinessProfileResponse(
-        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
+        b.getId(),
+        b.getName(),
+        b.getEmail(),
+        b.getPhone(),
+        b.getAddress(),
+        b.getLogoUrl(),
+        b.getCreatedAt());
   }
 
   @Transactional
@@ -90,7 +102,13 @@ public class BusinessProfileService {
     }
     b = businessRepository.save(b);
     return new BusinessProfileResponse(
-        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
+        b.getId(),
+        b.getName(),
+        b.getEmail(),
+        b.getPhone(),
+        b.getAddress(),
+        b.getLogoUrl(),
+        b.getCreatedAt());
   }
 
   @Transactional
@@ -114,7 +132,13 @@ public class BusinessProfileService {
     b.setLogoUrl(relative);
     b = businessRepository.save(b);
     return new BusinessProfileResponse(
-        b.getId(), b.getName(), b.getEmail(), b.getPhone(), b.getAddress(), b.getLogoUrl());
+        b.getId(),
+        b.getName(),
+        b.getEmail(),
+        b.getPhone(),
+        b.getAddress(),
+        b.getLogoUrl(),
+        b.getCreatedAt());
   }
 
   private Business findBusiness(UserPrincipal p) {
