@@ -7,13 +7,14 @@ import java.util.UUID;
 
 public record SaleRequest(
     @NotNull UUID storeId,
-    UUID clientId,
+    @NotNull UUID clientId,
     @NotBlank String paymentMethod,
     @Min(0) Integer discountAmount,
     @Min(0) Integer amountReceived,
     String note,
     @NotEmpty @Valid List<SaleLineRequest> lines) {
   public SaleRequest {
-    if (discountAmount == null) discountAmount = 0;
+    if (discountAmount == null)
+      discountAmount = 0;
   }
 }
