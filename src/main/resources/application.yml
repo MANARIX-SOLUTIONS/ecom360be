@@ -64,9 +64,10 @@ spring:
     validate-on-migrate: true
     out-of-order: true # allow V8.1 to run after V8 was already applied
 
-  # ── Mail (optional — set MAIL_HOST to enable; when empty, emails are logged only) ──
+  # ── Mail — default localhost for bootRun + Maildev exposed on host (:1025).
+  # In Docker Compose the API service sets MAIL_HOST=maildev (Docker DNS).
   mail:
-    host: ${MAIL_HOST:maildev}
+    host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
@@ -150,6 +151,10 @@ app:
     business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
   subscription:
     expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
+    reminder-cron: ${SUBSCRIPTION_REMINDER_CRON:0 0 8 * * ?}
+    reminder-offset-days: ${SUBSCRIPTION_REMINDER_OFFSET_DAYS:7,3,1}
+    billing-reminder-cron: ${BILLING_REMINDER_CRON:0 5 8 * * ?}
+    billing-reminders-enabled: ${BILLING_REMINDERS_ENABLED:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
     allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS

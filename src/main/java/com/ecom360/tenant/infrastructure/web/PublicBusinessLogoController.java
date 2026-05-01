@@ -16,9 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Sert les fichiers logo sans authentification (affichage &lt;img&gt;, impression).
- */
+/** Sert les fichiers logo sans authentification (affichage &lt;img&gt;, impression). */
 @RestController
 @RequestMapping(ApiConstants.API_BASE + "/public/business-logos")
 @Tag(name = "Public", description = "Fichiers publics")

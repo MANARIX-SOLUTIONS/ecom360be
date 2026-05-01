@@ -44,6 +44,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.springframework.boot:spring-boot-starter-mail")
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     // Database
     implementation("org.postgresql:postgresql")
@@ -68,8 +69,10 @@ dependencies {
     // Structured logging (JSON for prod)
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
 
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
+    // 1.18.38+ requis pour la compilation sous JDK 24 (TypeTag.UNKNOWN)
+    val lombokVer = "1.18.38"
+    compileOnly("org.projectlombok:lombok:$lombokVer")
+    annotationProcessor("org.projectlombok:lombok:$lombokVer")
 
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -89,6 +92,17 @@ tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+    // Local environments may expose an old Docker API value; force a modern
+    // default so Testcontainers can negotiate properly.
+    environment("DOCKER_API_VERSION", "1.41")
+
+    // JaCoCo 0.8.12 does not support JDK 24 classfiles yet.
+    // Keep tests runnable locally while retaining coverage on CI JDK17.
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_24)) {
+        extensions.configure(org.gradle.testing.jacoco.plugins.JacocoTaskExtension::class) {
+            isEnabled = false
+        }
+    }
 }
 
 // ── Spotless (formatting) ──
