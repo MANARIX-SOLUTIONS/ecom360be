@@ -9,8 +9,8 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 /**
- * Utilisateur « porteur » des opérations automatisées (import commande web) : priorité propriétaire,
- * puis gestionnaire, puis premier membre actif.
+ * Utilisateur « porteur » des opérations automatisées (import commande web) : priorité
+ * propriétaire, puis gestionnaire, puis premier membre actif.
  */
 @Service
 public class CommerceIntegrationActingUserResolver {

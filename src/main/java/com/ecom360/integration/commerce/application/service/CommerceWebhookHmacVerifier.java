@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Vérifie {@code X-Commerce-Signature} = HMAC-SHA256 (corps brut UTF-8, secret partagé), encodé en
- * hexadécimal (minuscules). Formes acceptées pour la signature : {@code <hex>} ou {@code sha256=<hex>}.
+ * hexadécimal (minuscules). Formes acceptées pour la signature : {@code <hex>} ou {@code
+ * sha256=<hex>}.
  */
 @Component
 public class CommerceWebhookHmacVerifier {
