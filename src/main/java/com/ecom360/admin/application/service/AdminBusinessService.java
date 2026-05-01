@@ -1,7 +1,7 @@
 package com.ecom360.admin.application.service;
 
-import com.ecom360.admin.application.dto.AdminBusinessSubscriptionInfo;
 import com.ecom360.admin.application.dto.AdminBusinessResponse;
+import com.ecom360.admin.application.dto.AdminBusinessSubscriptionInfo;
 import com.ecom360.admin.application.dto.AdminCreateBusinessRequest;
 import com.ecom360.admin.application.dto.AdminPlanItem;
 import com.ecom360.admin.application.dto.AdminRenewSubscriptionRequest;
@@ -16,6 +16,7 @@ import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.tenant.application.service.BusinessRoleBootstrapService;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import com.ecom360.tenant.application.service.TenantWelcomeNotificationService;
 import com.ecom360.tenant.domain.model.Business;
 import com.ecom360.tenant.domain.model.BusinessRole;
 import com.ecom360.tenant.domain.model.BusinessUser;
@@ -58,6 +59,7 @@ public class AdminBusinessService {
   private final SubscriptionService subscriptionService;
   private final BusinessRoleBootstrapService businessRoleBootstrapService;
   private final BusinessRoleRepository businessRoleRepository;
+  private final TenantWelcomeNotificationService tenantWelcomeNotificationService;
 
   public AdminBusinessService(
       BusinessRepository businessRepository,
@@ -69,7 +71,8 @@ public class AdminBusinessService {
       SaleRepository saleRepository,
       SubscriptionService subscriptionService,
       BusinessRoleBootstrapService businessRoleBootstrapService,
-      BusinessRoleRepository businessRoleRepository) {
+      BusinessRoleRepository businessRoleRepository,
+      TenantWelcomeNotificationService tenantWelcomeNotificationService) {
     this.businessRepository = businessRepository;
     this.businessUserRepository = businessUserRepository;
     this.userRepository = userRepository;
@@ -80,6 +83,7 @@ public class AdminBusinessService {
     this.subscriptionService = subscriptionService;
     this.businessRoleBootstrapService = businessRoleBootstrapService;
     this.businessRoleRepository = businessRoleRepository;
+    this.tenantWelcomeNotificationService = tenantWelcomeNotificationService;
   }
 
   public Page<AdminBusinessResponse> list(
@@ -165,6 +169,10 @@ public class AdminBusinessService {
       createActiveSubscriptionForBusiness(b.getId(), plan, "monthly");
     }
 
+    if (req.ownerUserId() != null) {
+      tenantWelcomeNotificationService.sendWelcomeAfterProvisioning(b.getId(), req.ownerUserId());
+    }
+
     return getById(b.getId(), p);
   }
 
@@ -214,9 +222,7 @@ public class AdminBusinessService {
 
     String planSlug;
     String billingCycleRaw;
-    if (req != null
-        && req.planSlug() != null
-        && !req.planSlug().isBlank()) {
+    if (req != null && req.planSlug() != null && !req.planSlug().isBlank()) {
       planSlug = req.planSlug().trim();
       billingCycleRaw =
           req.billingCycle() != null && !req.billingCycle().isBlank()
@@ -259,7 +265,9 @@ public class AdminBusinessService {
     }
 
     String cycle =
-        "yearly".equalsIgnoreCase(billingCycleRaw != null ? billingCycleRaw : "") ? "yearly" : "monthly";
+        "yearly".equalsIgnoreCase(billingCycleRaw != null ? billingCycleRaw : "")
+            ? "yearly"
+            : "monthly";
     LocalDate today = LocalDate.now();
     LocalDate anchor;
     if (latest == null) {

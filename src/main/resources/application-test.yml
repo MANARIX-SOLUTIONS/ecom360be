@@ -5,6 +5,13 @@
 # ──────────────────────────────────────────────────────────────
 
 spring:
+  # évite les cron pendant les tests d’intégration
+  task:
+    scheduling:
+      enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mail.MailAutoConfiguration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360_test}
     username: ${DB_USERNAME:postgres}
@@ -13,7 +20,7 @@ spring:
       minimum-idle: 1
       maximum-pool-size: 5
       connection-timeout: 10000
-      leak-detection-threshold: 0   # off in tests
+      leak-detection-threshold: 0 # off in tests
 
   jpa:
     show-sql: false
@@ -26,7 +33,7 @@ spring:
     clean-on-validation-error: true
 
   cache:
-    type: none                        # disable cache in tests
+    type: none # disable cache in tests
 
 # ── Server (random port for parallel tests) ──
 server:
@@ -35,8 +42,8 @@ server:
 # ── JWT (short-lived for test speed) ──
 jwt:
   secret: test-secret-key-min-32-chars-for-hmac-sha256-ok
-  expiration-ms: 60000                # 1 min
-  refresh-expiration-ms: 120000       # 2 min
+  expiration-ms: 60000 # 1 min
+  refresh-expiration-ms: 120000 # 2 min
 
 # ── Swagger OFF ──
 springdoc:

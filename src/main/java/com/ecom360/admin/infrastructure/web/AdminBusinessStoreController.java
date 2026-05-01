@@ -42,7 +42,8 @@ public class AdminBusinessStoreController {
       @PathVariable UUID businessId,
       @Valid @RequestBody StoreRequest req,
       @AuthenticationPrincipal UserPrincipal p) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(adminStoreService.create(businessId, req, p));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(adminStoreService.create(businessId, req, p));
   }
 
   @PutMapping("/{storeId}")

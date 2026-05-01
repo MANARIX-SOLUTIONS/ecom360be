@@ -10,7 +10,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class, AppFilesProperties.class})
+@EnableConfigurationProperties({
+  JwtProperties.class,
+  CorsProperties.class,
+  AppFilesProperties.class
+})
 public class Ecom360Application {
 
   public static void main(String[] args) {
