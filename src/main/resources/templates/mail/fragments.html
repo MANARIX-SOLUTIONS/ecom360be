@@ -1,0 +1,103 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <body>
+    <th:block th:fragment="h1Title (text)">
+      <p
+        style="
+          margin: 0 0 20px;
+          font-size: 20px;
+          line-height: 1.35;
+          font-weight: 700;
+          color: #0f172a;
+        "
+        th:text="${text}"
+      ></p>
+    </th:block>
+
+    <th:block th:fragment="para (text)">
+      <p
+        style="
+          margin: 0 0 16px;
+          font-size: 15px;
+          line-height: 1.6;
+          color: #334155;
+        "
+        th:text="${text}"
+      ></p>
+    </th:block>
+
+    <th:block th:fragment="muted (text)">
+      <p
+        style="
+          margin: 0 0 16px;
+          font-size: 13px;
+          line-height: 1.55;
+          color: #64748b;
+        "
+        th:text="${text}"
+      ></p>
+    </th:block>
+
+    <th:block th:fragment="ctaButton (url, label)">
+      <table
+        role="presentation"
+        cellpadding="0"
+        cellspacing="0"
+        style="margin: 24px 0"
+      >
+        <tr>
+          <td style="border-radius: 8px; background: #0d9488">
+            <a
+              th:href="${url}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="
+                display: inline-block;
+                padding: 14px 28px;
+                font-size: 15px;
+                font-weight: 600;
+                color: #ffffff;
+                text-decoration: none;
+              "
+              th:text="${label}"
+            ></a>
+          </td>
+        </tr>
+      </table>
+    </th:block>
+
+    <th:block th:fragment="signature">
+      <p
+        style="
+          margin: 16px 0 0;
+          font-size: 13px;
+          line-height: 1.55;
+          color: #64748b;
+        "
+      >
+        Cordialement,<br />L’équipe 360 PME Commerce
+      </p>
+    </th:block>
+
+    <th:block th:fragment="linkLead (lead, url, anchor)">
+      <p
+        style="
+          margin: 0 0 16px;
+          font-size: 15px;
+          line-height: 1.6;
+          color: #334155;
+        "
+      >
+        <span th:text="${lead}"></span
+        ><!--
+ --><a
+          th:href="${url}"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="color: #0d9488; font-weight: 600; text-decoration: none"
+          th:text="${anchor}"
+        ></a>
+      </p>
+    </th:block>
+  </body>
+</html>

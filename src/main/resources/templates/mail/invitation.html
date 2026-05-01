@@ -1,0 +1,27 @@
+<!doctype html>
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  th:replace="~{mail/layout :: emailLayout(${preheader}, ${appUrl}, ~{:: mailBody})}"
+>
+  <body>
+    <th:block th:fragment="mailBody">
+      <th:block
+        th:replace="~{mail/fragments :: h1Title ('Vous êtes invité(e)')}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${greetingLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${inviteLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: ctaButton (${setPasswordLink}, 'Activer mon compte et choisir un mot de passe')}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: muted ('Ce lien expire sous 24 h. Après connexion, vos espaces disponibles reflètent les habilitations définies par votre administrateur.')}"
+      ></th:block>
+      <th:block th:replace="~{mail/fragments :: signature}"></th:block>
+    </th:block>
+  </body>
+</html>

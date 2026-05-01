@@ -1,0 +1,24 @@
+<!doctype html>
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  th:replace="~{mail/layout :: emailLayout(${preheader}, ${appUrl}, ~{:: mailBody})}"
+>
+  <body>
+    <th:block th:fragment="mailBody">
+      <th:block
+        th:replace="~{mail/fragments :: para (${greetingLine})}"
+      ></th:block>
+      <div
+        style="
+          margin: 0 0 16px;
+          font-size: 15px;
+          line-height: 1.6;
+          color: #334155;
+        "
+        th:utext="${bodyHtml}"
+      ></div>
+      <th:block th:replace="~{mail/fragments :: signature}"></th:block>
+    </th:block>
+  </body>
+</html>
