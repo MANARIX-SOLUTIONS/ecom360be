@@ -27,7 +27,10 @@ public class DemoRequest {
   @Column(name = "business_name", nullable = false)
   private String businessName;
 
-  /** Null si le demandeur n'a pas défini de mot de passe (lien envoyé après validation). */
+  /**
+   * Null si le demandeur n'a pas défini de mot de passe (lien envoyé après
+   * validation).
+   */
   @Column(name = "password_hash")
   private String passwordHash;
 
@@ -40,6 +43,12 @@ public class DemoRequest {
   private String city;
 
   private String sector;
+
+  @Column(name = "preferred_plan_slug")
+  private String preferredPlanSlug;
+
+  @Column(name = "preferred_billing_cycle")
+  private String preferredBillingCycle;
 
   @Column(nullable = false)
   private String status = STATUS_PENDING;
@@ -70,7 +79,9 @@ public class DemoRequest {
       String message,
       String jobTitle,
       String city,
-      String sector) {
+      String sector,
+      String preferredPlanSlug,
+      String preferredBillingCycle) {
     DemoRequest d = new DemoRequest();
     d.fullName = fullName;
     d.email = email.trim().toLowerCase();
@@ -81,6 +92,8 @@ public class DemoRequest {
     d.jobTitle = jobTitle;
     d.city = city;
     d.sector = sector;
+    d.preferredPlanSlug = preferredPlanSlug;
+    d.preferredBillingCycle = preferredBillingCycle;
     d.status = STATUS_PENDING;
     return d;
   }
@@ -157,5 +170,13 @@ public class DemoRequest {
 
   public String getSector() {
     return sector;
+  }
+
+  public String getPreferredPlanSlug() {
+    return preferredPlanSlug;
+  }
+
+  public String getPreferredBillingCycle() {
+    return preferredBillingCycle;
   }
 }

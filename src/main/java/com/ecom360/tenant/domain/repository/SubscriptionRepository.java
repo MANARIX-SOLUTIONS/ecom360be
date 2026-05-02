@@ -22,23 +22,23 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
   Optional<Subscription> findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
       UUID businessId, java.util.Collection<String> statuses);
 
+  List<Subscription> findByBusinessIdAndStatusIn(UUID businessId, Collection<String> statuses);
+
   /** Trialing or active subscriptions past due for expiration. */
-  @Query(
-      """
-    SELECT s FROM Subscription s
-    WHERE s.status IN ('trialing', 'active')
-    AND s.currentPeriodEnd < :before
-    AND (s.cancelAtPeriodEnd = false OR s.cancelAtPeriodEnd IS NULL)
-    """)
+  @Query("""
+      SELECT s FROM Subscription s
+      WHERE s.status IN ('trialing', 'active')
+      AND s.currentPeriodEnd < :before
+      AND (s.cancelAtPeriodEnd = false OR s.cancelAtPeriodEnd IS NULL)
+      """)
   List<Subscription> findExpiredTrialsAndSubscriptions(@Param("before") LocalDate before);
 
   /** Active subscriptions with cancel_at_period_end that reached period end. */
-  @Query(
-      """
-    SELECT s FROM Subscription s
-    WHERE s.status IN ('trialing', 'active')
-    AND s.currentPeriodEnd < :before
-    AND s.cancelAtPeriodEnd = true
-    """)
+  @Query("""
+      SELECT s FROM Subscription s
+      WHERE s.status IN ('trialing', 'active')
+      AND s.currentPeriodEnd < :before
+      AND s.cancelAtPeriodEnd = true
+      """)
   List<Subscription> findCancelledAtPeriodEnd(@Param("before") LocalDate before);
 }

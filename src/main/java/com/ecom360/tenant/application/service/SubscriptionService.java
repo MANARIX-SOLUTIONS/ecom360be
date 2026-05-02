@@ -46,25 +46,26 @@ public class SubscriptionService {
     this.permissionService = permissionService;
   }
 
-  /** Create trial subscription for new business. Trial allowed only once per business. */
+  /**
+   * Create trial subscription for new business. Trial allowed only once per
+   * business.
+   */
   @Transactional
   public void createTrialForNewBusiness(UUID businessId) {
-    Business business =
-        businessRepository
-            .findById(businessId)
-            .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    Business business = businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     if (business.hasUsedTrial()) {
       throw new BusinessRuleException(
           "L'essai gratuit n'est utilisable qu'une seule fois. Veuillez souscrire à un plan.");
     }
 
-    Plan proPlan =
-        planRepository
-            .findBySlug("pro")
-            .orElse(
-                planRepository.findByIsActiveTrueOrderByPriceMonthlyAsc().stream()
-                    .findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException("Plan", "any")));
+    Plan proPlan = planRepository
+        .findBySlug("pro")
+        .orElse(
+            planRepository.findByIsActiveTrueOrderByPriceMonthlyAsc().stream()
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Plan", "any")));
     LocalDate start = LocalDate.now();
     LocalDate end = start.plusDays(TRIAL_DAYS);
 
@@ -105,9 +106,13 @@ public class SubscriptionService {
         .toList();
   }
 
-  /** Get plan slug for business (used at login). Returns null if no active subscription. */
+  /**
+   * Get plan slug for business (used at login). Returns null if no active
+   * subscription.
+   */
   public String getPlanSlugForBusiness(UUID businessId) {
-    if (businessId == null) return null;
+    if (businessId == null)
+      return null;
     return subscriptionRepository
         .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
             businessId, SubscriptionStatus.ACCESS_GRANTING)
@@ -117,11 +122,13 @@ public class SubscriptionService {
   }
 
   /**
-   * Get current plan for business. Returns empty if no active subscription (no limits enforced).
+   * Get current plan for business. Returns empty if no active subscription (no
+   * limits enforced).
    * Lazy-expires subscriptions past period end when detected.
    */
   public Optional<Plan> getPlanForBusiness(UUID businessId) {
-    if (businessId == null) return Optional.empty();
+    if (businessId == null)
+      return Optional.empty();
     return subscriptionRepository
         .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
             businessId, SubscriptionStatus.ACCESS_GRANTING)
@@ -130,8 +137,10 @@ public class SubscriptionService {
   }
 
   /**
-   * Enforces {@code max_stores} from the current plan when adding a store. No-op when no
-   * access-granting subscription exists (same behaviour as previous inline checks).
+   * Enforces {@code max_stores} from the current plan when adding a store. No-op
+   * when no
+   * access-granting subscription exists (same behaviour as previous inline
+   * checks).
    */
   public void assertCanAddStore(UUID businessId, int currentStoreCount) {
     getPlanForBusiness(businessId)
@@ -148,12 +157,98 @@ public class SubscriptionService {
             });
   }
 
+  @Transactional
+  public CheckoutSubscriptionDraft createIncompleteSubscriptionForCheckout(
+      String planSlug, String billingCycle, UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
+
+    Plan plan = planRepository
+        .findBySlug(planSlug)
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    if (!Boolean.TRUE.equals(plan.getIsActive())) {
+      throw new BusinessRuleException("Plan is not available");
+    }
+
+    String cycle = normalizeBillingCycle(billingCycle);
+    Optional<Subscription> currentOpt = subscriptionRepository
+        .findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId());
+    if (currentOpt.isPresent()) {
+      Subscription current = currentOpt.get();
+      if (current.isActive()
+          && current.getPlanId().equals(plan.getId())
+          && cycle.equals(current.getBillingCycle())) {
+        throw new BusinessRuleException("Already on this plan and billing cycle");
+      }
+    }
+
+    LocalDate start = LocalDate.now();
+    LocalDate end = cycle.equals("yearly") ? start.plusYears(1) : start.plusMonths(1);
+    Subscription sub = new Subscription();
+    sub.setBusinessId(p.businessId());
+    sub.setPlanId(plan.getId());
+    sub.setBillingCycle(cycle);
+    sub.setStatus(SubscriptionStatus.INCOMPLETE);
+    sub.setCurrentPeriodStart(start);
+    sub.setCurrentPeriodEnd(end);
+    sub = subscriptionRepository.save(sub);
+
+    Integer configuredAmount = cycle.equals("yearly") ? plan.getPriceYearly() : plan.getPriceMonthly();
+    int amount = configuredAmount != null ? configuredAmount : 0;
+    if (amount <= 0) {
+      throw new BusinessRuleException("Le plan sélectionné ne nécessite pas de paiement PSP.");
+    }
+    return new CheckoutSubscriptionDraft(sub, plan, amount, cycle);
+  }
+
+  @Transactional
+  public SubscriptionResponse activatePaidSubscription(UUID subscriptionId) {
+    Subscription sub = subscriptionRepository
+        .findById(subscriptionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Subscription", subscriptionId));
+    if (SubscriptionStatus.ACTIVE.equals(sub.getStatus())) {
+      return toSubscriptionResponse(sub);
+    }
+    if (!SubscriptionStatus.INCOMPLETE.equals(sub.getStatus())) {
+      throw new BusinessRuleException("Subscription is not awaiting payment");
+    }
+
+    UUID paidSubscriptionId = sub.getId();
+    subscriptionRepository
+        .findByBusinessIdAndStatusIn(sub.getBusinessId(), SubscriptionStatus.ACCESS_GRANTING)
+        .forEach(
+            current -> {
+              if (!current.getId().equals(paidSubscriptionId)) {
+                current.cancelImmediate();
+                subscriptionRepository.save(current);
+              }
+            });
+
+    sub.setStatus(SubscriptionStatus.ACTIVE);
+    sub.setCancelAtPeriodEnd(false);
+    sub = subscriptionRepository.save(sub);
+
+    businessRepository
+        .findById(sub.getBusinessId())
+        .ifPresent(
+            biz -> {
+              biz.activate();
+              biz.setTrialEndsAt(null);
+              biz.setTrialUsedAt(Instant.now());
+              businessRepository.save(biz);
+            });
+
+    return toSubscriptionResponse(sub);
+  }
+
   public LocalDate clampPeriodStartToRetention(UUID businessId, LocalDate periodStart) {
     return getPlanForBusiness(businessId)
         .map(
             plan -> {
-              int m = plan.getDataRetentionMonths() == null ? 0 : plan.getDataRetentionMonths();
-              if (m <= 0) return periodStart;
+              Integer retentionMonths = plan.getDataRetentionMonths();
+              int m = retentionMonths != null ? retentionMonths : 0;
+              if (m <= 0)
+                return periodStart;
               LocalDate min = LocalDate.now(ZoneId.systemDefault()).minusMonths(m);
               return periodStart.isBefore(min) ? min : periodStart;
             })
@@ -163,24 +258,30 @@ public class SubscriptionService {
   /** True if instant is strictly before the plan's retained history window. */
   public boolean isBeforeDataRetention(UUID businessId, Instant at) {
     Optional<Plan> opt = getPlanForBusiness(businessId);
-    if (opt.isEmpty()) return false;
-    int m = opt.get().getDataRetentionMonths() == null ? 0 : opt.get().getDataRetentionMonths();
-    if (m <= 0) return false;
+    if (opt.isEmpty())
+      return false;
+    Integer retentionMonths = opt.get().getDataRetentionMonths();
+    int m = retentionMonths != null ? retentionMonths : 0;
+    if (m <= 0)
+      return false;
     LocalDate min = LocalDate.now(ZoneId.systemDefault()).minusMonths(m);
     return at.isBefore(min.atStartOfDay(ZoneId.systemDefault()).toInstant());
   }
 
   public Instant clampSaleHistoryFrom(UUID businessId, Instant requestedFrom) {
     Optional<Plan> opt = getPlanForBusiness(businessId);
-    if (opt.isEmpty()) return requestedFrom;
-    int m = opt.get().getDataRetentionMonths() == null ? 0 : opt.get().getDataRetentionMonths();
-    if (m <= 0) return requestedFrom;
-    Instant minI =
-        LocalDate.now(ZoneId.systemDefault())
-            .minusMonths(m)
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant();
-    if (requestedFrom == null || requestedFrom.isBefore(minI)) return minI;
+    if (opt.isEmpty())
+      return requestedFrom;
+    Integer retentionMonths = opt.get().getDataRetentionMonths();
+    int m = retentionMonths != null ? retentionMonths : 0;
+    if (m <= 0)
+      return requestedFrom;
+    Instant minI = LocalDate.now(ZoneId.systemDefault())
+        .minusMonths(m)
+        .atStartOfDay(ZoneId.systemDefault())
+        .toInstant();
+    if (requestedFrom == null || requestedFrom.isBefore(minI))
+      return minI;
     return requestedFrom;
   }
 
@@ -218,7 +319,8 @@ public class SubscriptionService {
   }
 
   /**
-   * Subscribe or change plan. Handles: trial→paid, expired→paid, active→upgrade/downgrade,
+   * Subscribe or change plan. Handles: trial→paid, expired→paid,
+   * active→upgrade/downgrade,
    * cancelled→reactivate.
    */
   @Transactional
@@ -226,20 +328,19 @@ public class SubscriptionService {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
 
-    Plan plan =
-        planRepository
-            .findBySlug(planSlug)
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    Plan plan = planRepository
+        .findBySlug(planSlug)
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
     if (!Boolean.TRUE.equals(plan.getIsActive())) {
       throw new BusinessRuleException("Plan is not available");
     }
 
-    String cycle = "yearly".equalsIgnoreCase(billingCycle) ? "yearly" : "monthly";
+    String cycle = normalizeBillingCycle(billingCycle);
     LocalDate start = LocalDate.now();
     LocalDate end = cycle.equals("yearly") ? start.plusYears(1) : start.plusMonths(1);
 
-    Optional<Subscription> currentOpt =
-        subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId());
+    Optional<Subscription> currentOpt = subscriptionRepository
+        .findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId());
 
     if (currentOpt.isPresent()) {
       Subscription current = currentOpt.get();
@@ -275,18 +376,18 @@ public class SubscriptionService {
   }
 
   /**
-   * Cancel subscription. By default cancels at period end (keeps access until then). Use
+   * Cancel subscription. By default cancels at period end (keeps access until
+   * then). Use
    * cancelImmediate for instant cancellation.
    */
   @Transactional
   public void cancelSubscription(boolean atPeriodEnd, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
-    Subscription sub =
-        subscriptionRepository
-            .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
-                p.businessId(), SubscriptionStatus.ACCESS_GRANTING)
-            .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
+    Subscription sub = subscriptionRepository
+        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
+            p.businessId(), SubscriptionStatus.ACCESS_GRANTING)
+        .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
 
     if (atPeriodEnd) {
       sub.cancelAtPeriodEnd();
@@ -302,10 +403,9 @@ public class SubscriptionService {
   public SubscriptionResponse reactivateSubscription(UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
-    Subscription sub =
-        subscriptionRepository
-            .findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId())
-            .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
+    Subscription sub = subscriptionRepository
+        .findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId())
+        .orElseThrow(() -> new ResourceNotFoundException("Subscription", "current"));
 
     if (!sub.getCancelAtPeriodEnd()) {
       throw new BusinessRuleException("No subscription to reactivate");
@@ -316,18 +416,13 @@ public class SubscriptionService {
 
     sub.setCancelAtPeriodEnd(false);
     subscriptionRepository.save(sub);
-    Plan plan =
-        planRepository
-            .findById(sub.getPlanId())
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
     return toSubscriptionResponse(sub);
   }
 
   private SubscriptionResponse toSubscriptionResponse(Subscription sub) {
-    Plan plan =
-        planRepository
-            .findById(sub.getPlanId())
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
+    Plan plan = planRepository
+        .findById(sub.getPlanId())
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
     long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), sub.getCurrentPeriodEnd());
     return new SubscriptionResponse(
         sub.getId(),
@@ -372,11 +467,25 @@ public class SubscriptionService {
         Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
         Boolean.TRUE.equals(plan.getFeatureDeliveryCouriers()),
         Boolean.TRUE.equals(plan.getFeatureGlobalView()),
-        plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
+        dataRetentionMonths(plan));
+  }
+
+  private String normalizeBillingCycle(String billingCycle) {
+    return "yearly".equalsIgnoreCase(billingCycle) ? "yearly" : "monthly";
+  }
+
+  private int dataRetentionMonths(Plan plan) {
+    Integer retentionMonths = plan.getDataRetentionMonths();
+    return retentionMonths != null ? retentionMonths : 0;
+  }
+
+  public record CheckoutSubscriptionDraft(
+      Subscription subscription, Plan plan, Integer amount, String billingCycle) {
   }
 
   /**
-   * Lazy expiration: if subscription period has ended, expire it and return false. Otherwise return
+   * Lazy expiration: if subscription period has ended, expire it and return
+   * false. Otherwise return
    * true. Runs in its own transaction when a write is needed.
    */
   @Transactional

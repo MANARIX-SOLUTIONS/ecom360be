@@ -150,6 +150,18 @@ app:
     business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
   subscription:
     expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
+  payments:
+    provider: ${PAYMENT_PROVIDER:paydunya}
+    currency: ${PAYMENT_CURRENCY:XOF}
+    public-api-url: ${APP_API_URL:http://localhost:8080}
+    app-url: ${APP_URL:http://localhost:5173}
+    paydunya:
+      enabled: ${PAYDUNYA_ENABLED:false}
+      base-url: ${PAYDUNYA_BASE_URL:https://app.paydunya.com}
+      master-key: ${PAYDUNYA_MASTER_KEY:}
+      private-key: ${PAYDUNYA_PRIVATE_KEY:}
+      token: ${PAYDUNYA_TOKEN:}
+      store-name: ${PAYDUNYA_STORE_NAME:360 PME Commerce}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
     allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS

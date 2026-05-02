@@ -61,17 +61,18 @@ public class DemoRequestService {
     }
 
     String phone = req.phone().trim();
-    DemoRequest dr =
-        DemoRequest.create(
-            req.fullName().trim(),
-            email,
-            phone,
-            req.businessName().trim(),
-            null,
-            req.message() != null && !req.message().isBlank() ? req.message().trim() : null,
-            req.jobTitle() != null && !req.jobTitle().isBlank() ? req.jobTitle().trim() : null,
-            req.city() != null && !req.city().isBlank() ? req.city().trim() : null,
-            req.sector() != null && !req.sector().isBlank() ? req.sector().trim() : null);
+    DemoRequest dr = DemoRequest.create(
+        req.fullName().trim(),
+        email,
+        phone,
+        req.businessName().trim(),
+        null,
+        req.message() != null && !req.message().isBlank() ? req.message().trim() : null,
+        req.jobTitle() != null && !req.jobTitle().isBlank() ? req.jobTitle().trim() : null,
+        req.city() != null && !req.city().isBlank() ? req.city().trim() : null,
+        req.sector() != null && !req.sector().isBlank() ? req.sector().trim() : null,
+        normalizePlanSlug(req.preferredPlanSlug()),
+        normalizeBillingCycle(req.preferredBillingCycle()));
     dr = demoRequestRepo.save(dr);
 
     auditLogService.logAsync(
@@ -95,32 +96,29 @@ public class DemoRequestService {
   public Page<DemoRequestResponse> list(UserPrincipal admin, String status, int page, int size) {
     requirePlatformAdmin(admin);
     Pageable pg = PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending());
-    Page<DemoRequest> p =
-        status != null && !status.isBlank()
-            ? demoRequestRepo.findByStatusOrderByCreatedAtDesc(status.trim(), pg)
-            : demoRequestRepo.findAllByOrderByCreatedAtDesc(pg);
+    Page<DemoRequest> p = status != null && !status.isBlank()
+        ? demoRequestRepo.findByStatusOrderByCreatedAtDesc(status.trim(), pg)
+        : demoRequestRepo.findAllByOrderByCreatedAtDesc(pg);
     return p.map(this::map);
   }
 
   @Transactional
   public void approve(UUID id, UserPrincipal admin) {
     requirePlatformAdmin(admin);
-    DemoRequest dr =
-        demoRequestRepo
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("DemoRequest", id));
+    DemoRequest dr = demoRequestRepo
+        .findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("DemoRequest", id));
     if (!DemoRequest.STATUS_PENDING.equals(dr.getStatus())) {
       throw new BusinessRuleException("Cette demande n'est plus en attente.");
     }
 
     boolean hadPassword = dr.getPasswordHash() != null && !dr.getPasswordHash().isBlank();
-    ProvisionedTenant pt =
-        authService.provisionTenantAfterDemoApproval(
-            dr.getFullName(),
-            dr.getEmail(),
-            dr.getPasswordHash(),
-            dr.getPhone(),
-            dr.getBusinessName());
+    ProvisionedTenant pt = authService.provisionTenantAfterDemoApproval(
+        dr.getFullName(),
+        dr.getEmail(),
+        dr.getPasswordHash(),
+        dr.getPhone(),
+        dr.getBusinessName());
 
     dr.markApproved(admin.userId());
     demoRequestRepo.save(dr);
@@ -147,10 +145,9 @@ public class DemoRequestService {
   @Transactional
   public void reject(UUID id, UserPrincipal admin, DemoRejectRequest req) {
     requirePlatformAdmin(admin);
-    DemoRequest dr =
-        demoRequestRepo
-            .findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("DemoRequest", id));
+    DemoRequest dr = demoRequestRepo
+        .findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("DemoRequest", id));
     if (!DemoRequest.STATUS_PENDING.equals(dr.getStatus())) {
       throw new BusinessRuleException("Cette demande n'est plus en attente.");
     }
@@ -186,6 +183,8 @@ public class DemoRequestService {
         d.getJobTitle(),
         d.getCity(),
         d.getSector(),
+        d.getPreferredPlanSlug(),
+        d.getPreferredBillingCycle(),
         d.getStatus(),
         d.getCreatedAt(),
         d.getReviewedAt(),
@@ -197,5 +196,18 @@ public class DemoRequestService {
     if (p == null || !p.isPlatformAdmin()) {
       throw new AccessDeniedException("Platform admin required");
     }
+  }
+
+  private String normalizePlanSlug(String value) {
+    if (value == null || value.isBlank())
+      return null;
+    String plan = value.trim().toLowerCase();
+    return java.util.Set.of("starter", "pro", "business").contains(plan) ? plan : null;
+  }
+
+  private String normalizeBillingCycle(String value) {
+    if (value == null || value.isBlank())
+      return null;
+    return "yearly".equalsIgnoreCase(value) ? "yearly" : "monthly";
   }
 }
