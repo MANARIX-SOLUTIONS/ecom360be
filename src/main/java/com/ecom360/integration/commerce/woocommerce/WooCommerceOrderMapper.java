@@ -104,15 +104,11 @@ public class WooCommerceOrderMapper {
       int lineId = item.hasNonNull("id") ? item.get("id").asInt(0) : 0;
       if (sku.isBlank()) {
         if (productId > 0) {
-          sku =
-              variationId > 0
-                  ? "wc-" + productId + "-v-" + variationId
-                  : "wc-" + productId;
+          sku = variationId > 0 ? "wc-" + productId + "-v-" + variationId : "wc-" + productId;
         } else if (lineId > 0) {
           sku = "wc-line-" + lineId;
         } else {
-          throw new BusinessRuleException(
-              "Ligne WooCommerce sans SKU ni product_id exploitable.");
+          throw new BusinessRuleException("Ligne WooCommerce sans SKU ni product_id exploitable.");
         }
       }
       String label = item.hasNonNull("name") ? item.get("name").asText("Article") : "Article";
@@ -154,7 +150,8 @@ public class WooCommerceOrderMapper {
   }
 
   private static CanonicalShippingPayload mapShipping(JsonNode order) {
-    String total = order.hasNonNull("shipping_total") ? order.get("shipping_total").asText("0") : "0";
+    String total =
+        order.hasNonNull("shipping_total") ? order.get("shipping_total").asText("0") : "0";
     int amount = parseMoneyMinorUnit(total);
     String method = null;
     JsonNode sl = order.get("shipping_lines");

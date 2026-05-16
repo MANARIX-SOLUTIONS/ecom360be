@@ -21,7 +21,10 @@ public final class NavigationPermissionRules {
     m.put("products", List.of("PRODUCTS_READ"));
     m.put("clients", List.of("CLIENTS_READ"));
     m.put("suppliers", List.of("SUPPLIERS_READ"));
-    /** Au moins une permission livreurs (souvent READ seul n’est pas coché si l’admin donne Créer, etc.). */
+    /**
+     * Au moins une permission livreurs (souvent READ seul n’est pas coché si l’admin donne Créer,
+     * etc.).
+     */
     m.put(
         "livreurs",
         List.of(
@@ -33,9 +36,7 @@ public final class NavigationPermissionRules {
     m.put("expenses", List.of("EXPENSES_READ"));
     /** Rapports / exports : permission dédiée (distinct du tableau de bord). */
     m.put("reports", List.of("REPORTS_READ"));
-    m.put(
-        "settings",
-        List.of("STORES_READ", "SUBSCRIPTION_READ", "BUSINESS_USERS_READ"));
+    m.put("settings", List.of("STORES_READ", "SUBSCRIPTION_READ", "BUSINESS_USERS_READ"));
     m.put("settings:stores", List.of("STORES_READ"));
     m.put("settings:profile", List.of("STORES_READ"));
     m.put("settings:subscription", List.of("SUBSCRIPTION_READ"));

@@ -1,0 +1,28 @@
+<!doctype html>
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  th:replace="~{mail/layout :: emailLayout(${preheader}, ${appUrl}, ~{:: mailBody})}"
+>
+  <body>
+    <th:block th:fragment="mailBody">
+      <th:block
+        th:replace="~{mail/fragments :: h1Title ('Suite à votre demande')}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${greetingLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para ('Nous ne pouvons malheureusement pas donner suite à votre demande de démo dans l’immédiat.')}"
+      ></th:block>
+      <th:block
+        th:if="${hasReason}"
+        th:replace="~{mail/fragments :: para (${reasonLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para ('Notre équipe reste à votre disposition pour vous orienter vers la meilleure option de démarrage selon vos besoins.')}"
+      ></th:block>
+      <th:block th:replace="~{mail/fragments :: signature}"></th:block>
+    </th:block>
+  </body>
+</html>

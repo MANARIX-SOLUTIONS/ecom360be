@@ -1,0 +1,24 @@
+<!doctype html>
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  th:replace="~{mail/layout :: emailLayout(${preheader}, ${appUrl}, ~{:: mailBody})}"
+>
+  <body>
+    <th:block th:fragment="mailBody">
+      <th:block
+        th:replace="~{mail/fragments :: h1Title (${heading})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${greetingLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${detailLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: ctaButton (${subscriptionUrl}, ${ctaLabel})}"
+      ></th:block>
+      <th:block th:replace="~{mail/fragments :: signature}"></th:block>
+    </th:block>
+  </body>
+</html>

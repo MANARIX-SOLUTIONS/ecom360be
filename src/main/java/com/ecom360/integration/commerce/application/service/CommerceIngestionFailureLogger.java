@@ -18,7 +18,8 @@ public class CommerceIngestionFailureLogger {
 
   private final CommerceOrderIngestionLogRepository ingestionLogRepository;
 
-  public CommerceIngestionFailureLogger(CommerceOrderIngestionLogRepository ingestionLogRepository) {
+  public CommerceIngestionFailureLogger(
+      CommerceOrderIngestionLogRepository ingestionLogRepository) {
     this.ingestionLogRepository = ingestionLogRepository;
   }
 

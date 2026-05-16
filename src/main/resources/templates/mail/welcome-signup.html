@@ -1,0 +1,51 @@
+<!doctype html>
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  th:replace="~{mail/layout :: emailLayout(${preheader}, ${appUrl}, ~{:: mailBody})}"
+>
+  <body>
+    <th:block th:fragment="mailBody">
+      <th:block
+        th:replace="~{mail/fragments :: h1Title ('Bienvenue')}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${greetingLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${readyLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: para (${trialOrActiveLine})}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: muted ('Pour bien démarrer :')}"
+      ></th:block>
+      <table
+        role="presentation"
+        cellpadding="0"
+        cellspacing="0"
+        style="margin: 0 0 20px; width: 100%"
+      >
+        <tr th:each="row : ${starterLines}">
+          <td
+            style="
+              padding: 4px 0;
+              font-size: 15px;
+              line-height: 1.55;
+              color: #334155;
+            "
+            th:text="|• ${row}|"
+          ></td>
+        </tr>
+      </table>
+      <th:block
+        th:replace="~{mail/fragments :: linkLead ('Abonnement : ', ${subscriptionUrl}, 'Paramètres d’abonnement')}"
+      ></th:block>
+      <th:block
+        th:replace="~{mail/fragments :: ctaButton (${dashboardUrl}, 'Ouvrir le tableau de bord')}"
+      ></th:block>
+      <th:block th:replace="~{mail/fragments :: signature}"></th:block>
+    </th:block>
+  </body>
+</html>

@@ -1,0 +1,136 @@
+<!doctype html>
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  th:fragment="emailLayout (preheader, appUrl, main)"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title></title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f1f5f9">
+    <div
+      style="
+        display: none;
+        overflow: hidden;
+        line-height: 1px;
+        opacity: 0;
+        max-height: 0;
+        max-width: 0;
+      "
+      th:text="${preheader}"
+    >
+      pre
+    </div>
+
+    <table
+      role="presentation"
+      cellpadding="0"
+      cellspacing="0"
+      width="100%"
+      style="background-color: #f1f5f9"
+    >
+      <tr>
+        <td align="center" style="padding: 28px 16px">
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            width="600"
+            style="
+              max-width: 600px;
+              width: 100%;
+              background: #ffffff;
+              border-radius: 10px;
+              overflow: hidden;
+              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+            "
+          >
+            <tr>
+              <td
+                style="
+                  padding: 28px 36px;
+                  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+                  font-family:
+                    system-ui,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    &quot;Segoe UI&quot;,
+                    Roboto,
+                    sans-serif;
+                "
+              >
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #ecfdf5;
+                    letter-spacing: -0.02em;
+                  "
+                >
+                  360 PME Commerce
+                </p>
+                <p style="margin: 6px 0 0; font-size: 13px; color: #99f6e4">
+                  Commerce &amp; gestion pour les PME
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  padding: 32px 36px;
+                  font-family:
+                    system-ui,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    &quot;Segoe UI&quot;,
+                    Roboto,
+                    sans-serif;
+                  color: #334155;
+                  font-size: 15px;
+                  line-height: 1.6;
+                "
+              >
+                <th:block th:replace="${main}"></th:block>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  padding: 20px 36px;
+                  background: #f8fafc;
+                  border-top: 1px solid #e2e8f0;
+                  font-family:
+                    system-ui,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    &quot;Segoe UI&quot;,
+                    Roboto,
+                    sans-serif;
+                "
+              >
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    color: #64748b;
+                  "
+                >
+                  Cet email a été envoyé par 360 PME Commerce.<br />
+                  <a
+                    th:href="${appUrl}"
+                    style="color: #0d9488; text-decoration: none"
+                    >Ouvrir l’application</a
+                  >
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

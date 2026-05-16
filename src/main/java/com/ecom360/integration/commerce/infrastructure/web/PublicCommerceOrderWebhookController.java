@@ -22,7 +22,8 @@ public class PublicCommerceOrderWebhookController {
 
   private final CommerceOrderIngestionService commerceOrderIngestionService;
 
-  public PublicCommerceOrderWebhookController(CommerceOrderIngestionService commerceOrderIngestionService) {
+  public PublicCommerceOrderWebhookController(
+      CommerceOrderIngestionService commerceOrderIngestionService) {
     this.commerceOrderIngestionService = commerceOrderIngestionService;
   }
 
@@ -40,11 +41,12 @@ public class PublicCommerceOrderWebhookController {
           @RequestHeader(value = ApiConstants.X_COMMERCE_SIGNATURE, required = false)
           String signature,
       @RequestBody String rawBody) {
-    return toHttpResponse(
-        commerceOrderIngestionService.ingest(incomingToken, rawBody, signature));
+    return toHttpResponse(commerceOrderIngestionService.ingest(incomingToken, rawBody, signature));
   }
 
-  @PostMapping(value = "/incoming/{incomingToken}/woocommerce", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(
+      value = "/incoming/{incomingToken}/woocommerce",
+      consumes = MediaType.APPLICATION_JSON_VALUE)
   @Operation(
       summary = "Recevoir une commande WooCommerce (REST / webhook)",
       description =

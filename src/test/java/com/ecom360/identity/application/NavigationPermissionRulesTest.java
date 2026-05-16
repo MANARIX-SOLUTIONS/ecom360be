@@ -1,8 +1,8 @@
 package com.ecom360.identity.application;
 
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Garde l’alignement avec les clés de navigation du client (Permission dans roles.ts). */
