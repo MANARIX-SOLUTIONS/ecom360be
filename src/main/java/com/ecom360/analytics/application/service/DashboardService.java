@@ -31,9 +31,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -321,22 +323,12 @@ public class DashboardService {
     long totalExpenses = expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, effStart, effEnd);
     long totalProfit = totalRevenue - totalExpenses;
 
-    List<Object[]> storeRows = saleRepo.sumRevenueAndCountByStoreIdBetween(bId, pStart, pEnd);
-    List<GlobalViewResponse.StoreStats> salesByStore = new ArrayList<>();
-    for (Object[] row : storeRows) {
-      UUID storeId = (UUID) row[0];
-      long revenue = row[1] instanceof Number n ? n.longValue() : 0L;
-      long count = row[2] instanceof Number n ? n.longValue() : 0L;
-      double sharePercent = totalRevenue > 0 ? (100.0 * revenue / totalRevenue) : 0;
-      salesByStore.add(
-          new GlobalViewResponse.StoreStats(
-              storeId,
-              storeNames.getOrDefault(storeId, "Boutique"),
-              revenue,
-              count,
-              Math.round(sharePercent * 10) / 10.0));
-    }
-    salesByStore.sort((a, b) -> Long.compare(b.revenue(), a.revenue()));
+    List<GlobalViewResponse.StoreStats> salesByStore = buildStoreStats(
+        storeNames,
+        saleRepo.sumRevenueAndCountByStoreIdBetween(bId, pStart, pEnd),
+        expenseRepo.sumAmountGroupedByStoreIdBetween(bId, effStart, effEnd),
+        totalRevenue,
+        totalExpenses);
 
     List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
     if (showLowStockGlobal) {
@@ -390,6 +382,79 @@ public class DashboardService {
         salesByStore,
         lowStock,
         topProducts);
+  }
+
+  private List<GlobalViewResponse.StoreStats> buildStoreStats(
+      Map<UUID, String> storeNames,
+      List<Object[]> salesRows,
+      List<Object[]> expenseRows,
+      long totalRevenue,
+      long totalExpenses) {
+    Map<UUID, long[]> salesByStore = new HashMap<>();
+    for (Object[] row : salesRows) {
+      UUID storeId = (UUID) row[0];
+      long revenue = row[1] instanceof Number n ? n.longValue() : 0L;
+      long count = row[2] instanceof Number n ? n.longValue() : 0L;
+      salesByStore.put(storeId, new long[] { revenue, count });
+    }
+
+    Map<UUID, Long> expensesByStore = new HashMap<>();
+    long unassignedExpenses = 0L;
+    for (Object[] row : expenseRows) {
+      UUID storeId = (UUID) row[0];
+      long amount = row[1] instanceof Number n ? n.longValue() : 0L;
+      if (storeId == null) {
+        unassignedExpenses = amount;
+      } else {
+        expensesByStore.put(storeId, amount);
+      }
+    }
+
+    Set<UUID> activeStoreIds = new HashSet<>();
+    activeStoreIds.addAll(salesByStore.keySet());
+    activeStoreIds.addAll(expensesByStore.keySet());
+
+    List<GlobalViewResponse.StoreStats> stats = new ArrayList<>();
+    for (UUID storeId : activeStoreIds) {
+      long[] sales = salesByStore.getOrDefault(storeId, new long[] { 0, 0 });
+      long revenue = sales[0];
+      long salesCount = sales[1];
+      long expenses = expensesByStore.getOrDefault(storeId, 0L);
+      stats.add(
+          new GlobalViewResponse.StoreStats(
+              storeId,
+              storeNames.getOrDefault(storeId, "Boutique"),
+              revenue,
+              salesCount,
+              roundSharePercent(totalRevenue, revenue),
+              expenses,
+              revenue - expenses,
+              roundSharePercent(totalExpenses, expenses)));
+    }
+
+    if (unassignedExpenses > 0) {
+      stats.add(
+          new GlobalViewResponse.StoreStats(
+              null,
+              "Communes",
+              0,
+              0,
+              0,
+              unassignedExpenses,
+              -unassignedExpenses,
+              roundSharePercent(totalExpenses, unassignedExpenses)));
+    }
+
+    stats.sort(
+        Comparator.comparingLong(GlobalViewResponse.StoreStats::revenue)
+            .reversed()
+            .thenComparingLong(GlobalViewResponse.StoreStats::expenses)
+            .reversed());
+    return stats;
+  }
+
+  private static double roundSharePercent(long total, long part) {
+    return total > 0 ? Math.round(1000.0 * part / total) / 10.0 : 0;
   }
 
   private record PeriodSnapshot(
