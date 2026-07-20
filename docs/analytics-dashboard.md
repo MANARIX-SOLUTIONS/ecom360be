@@ -8,12 +8,13 @@ the response schema alone.
 
 All dashboard endpoints require:
 
-- a bearer token;
-- an active business context (normally selected with `X-Business-Id`);
+- a bearer token whose JWT claims contain the business context;
+- an active or trialing subscription (otherwise the subscription filter returns HTTP `402`);
 - the permissions listed below.
 
-Dates use ISO `yyyy-MM-dd`. Date ranges are inclusive and are converted to instants with the
-application server's time zone.
+The API does not select a business from `X-Business-Id`; the token's `businessId` is authoritative.
+Dates use ISO `yyyy-MM-dd`. Ranges are inclusive. Sale timestamps are bounded using the application
+server's time zone, while expenses are compared directly by `expenseDate`.
 
 | Endpoint | Permission | Purpose |
 | --- | --- | --- |
@@ -27,7 +28,6 @@ For example:
 ```bash
 curl --get 'http://localhost:8080/api/v1/dashboard' \
   --header 'Authorization: Bearer <access-token>' \
-  --header 'X-Business-Id: <business-id>' \
   --data-urlencode 'periodStart=2026-05-01' \
   --data-urlencode 'periodEnd=2026-05-31' \
   --data-urlencode 'storeId=<store-id>'
@@ -44,15 +44,16 @@ The main dashboard and top-products endpoint resolve the reporting period in thi
 2. `periodStart` is moved forward to the plan's earliest retained date, if necessary.
 3. If `periodEnd` is before the resulting start, the end is set equal to the start.
 
-Use `periodStart` and `periodEnd` returned by the API as the authoritative effective range. The
-service does not otherwise reject reversed ranges or cap future end dates.
+Use `periodStart` and `periodEnd` returned by the main dashboard or global-view response as the
+authoritative effective range. The paginated top-products response does not echo its effective
+dates. The service does not otherwise reject reversed ranges or cap future end dates.
 
 The seeded plans currently behave as follows:
 
 | Plan | Dashboard period | Low-stock alerts | Gross-margin fields | Global view |
 | --- | --- | --- | --- | --- |
-| Starter | Today only; `analyticsLimitedToToday=true` | Hidden | Not returned | Denied |
-| Pro | Requested range, limited to 12 months of history | Available | Not returned | Available |
+| Starter | Today only; `analyticsLimitedToToday=true` | Hidden | `null` and `[]` | Denied |
+| Pro | Requested range, limited to 12 months of history | Available | `null` and `[]` | Available |
 | Business | Requested range, unlimited history | Available | Available | Available |
 
 Plan feature flags are the runtime source of truth; deployments may change plan records after the
@@ -112,6 +113,10 @@ sales, and low-stock rows are scoped to that store. The following values remain 
 `totalClients` and `totalSuppliers` count active records. `totalProducts` counts all tenant
 products.
 
+Analytics does not apply a user's assigned-store list. A user with any qualifying dashboard
+permission can query any store belonging to the JWT's tenant, and an unfiltered request covers all
+tenant stores.
+
 ## Paginated lists
 
 The full preview lists are available through:
@@ -139,7 +144,7 @@ pagination has no date range and returns an empty slice when the plan disables s
 
 ## Global view
 
-`GET /api/v1/dashboard/global` aggregates every store and does not accept `storeId`. It requires:
+`GET /api/v1/dashboard/global` aggregates tenant stores and does not accept `storeId`. It requires:
 
 1. `GLOBAL_VIEW_READ`;
 2. `featureGlobalView=true`;
@@ -150,10 +155,13 @@ shares, low-stock rows, and the top 10 products. The requested start is subject 
 and the effective dates are returned in the response. Store revenue shares are rounded to one
 decimal place and sorted by revenue descending.
 
+`storeCount` includes inactive stores. `salesByStore` includes only stores with at least one
+completed sale in the period. Low-stock rows also scan inactive stores and are returned as one
+unpaginated list.
+
 ```bash
 curl --get 'http://localhost:8080/api/v1/dashboard/global' \
   --header 'Authorization: Bearer <access-token>' \
-  --header 'X-Business-Id: <business-id>' \
   --data-urlencode 'periodStart=2026-01-01' \
   --data-urlencode 'periodEnd=2026-05-31'
 ```
