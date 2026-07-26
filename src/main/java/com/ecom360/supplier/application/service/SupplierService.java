@@ -60,10 +60,14 @@ public class SupplierService {
     return map(supplierRepo.save(s));
   }
 
-  public Page<SupplierResponse> list(UserPrincipal p, Pageable pg) {
+  public Page<SupplierResponse> list(UserPrincipal p, String search, Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.SUPPLIERS_READ);
-    return supplierRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg).map(this::map);
+    String q = search != null ? search.trim() : "";
+    if (q.isEmpty()) {
+      return supplierRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg).map(this::map);
+    }
+    return supplierRepo.searchActive(p.businessId(), q, pg).map(this::map);
   }
 
   public SupplierResponse getById(UUID id, UserPrincipal p) {
@@ -123,15 +127,14 @@ public class SupplierService {
     return paymentRepo
         .findBySupplierIdOrderByCreatedAtDesc(supplierId, pg)
         .map(
-            pay ->
-                new SupplierPaymentResponse(
-                    pay.getId(),
-                    pay.getSupplierId(),
-                    pay.getUserId(),
-                    pay.getAmount(),
-                    pay.getPaymentMethod(),
-                    pay.getNote(),
-                    pay.getCreatedAt()));
+            pay -> new SupplierPaymentResponse(
+                pay.getId(),
+                pay.getSupplierId(),
+                pay.getUserId(),
+                pay.getAmount(),
+                pay.getPaymentMethod(),
+                pay.getNote(),
+                pay.getCreatedAt()));
   }
 
   private Supplier find(UUID id, UserPrincipal p) {
@@ -141,7 +144,8 @@ public class SupplierService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess())
+      throw new AccessDeniedException("Business context required");
   }
 
   private SupplierResponse map(Supplier s) {
