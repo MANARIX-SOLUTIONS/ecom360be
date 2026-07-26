@@ -8,6 +8,7 @@ import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
+import com.ecom360.shared.infrastructure.cache.CachedLookups;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -17,14 +18,17 @@ public class CategoryService {
   private final CategoryRepository repo;
   private final ProductRepository productRepo;
   private final RolePermissionService permissionService;
+  private final CachedLookups cachedLookups;
 
   public CategoryService(
       CategoryRepository repo,
       ProductRepository productRepo,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      CachedLookups cachedLookups) {
     this.repo = repo;
     this.productRepo = productRepo;
     this.permissionService = permissionService;
+    this.cachedLookups = cachedLookups;
   }
 
   public CategoryResponse create(CategoryRequest r, UserPrincipal p) {
@@ -37,15 +41,15 @@ public class CategoryService {
     c.setName(r.name());
     c.setColor(r.color());
     c.setSortOrder(r.sortOrder());
-    return map(repo.save(c));
+    CategoryResponse created = map(repo.save(c));
+    cachedLookups.evictCategories(p.businessId());
+    return created;
   }
 
   public List<CategoryResponse> list(UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.CATEGORIES_READ);
-    return repo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
-        .map(this::map)
-        .toList();
+    return cachedLookups.categoriesByBusiness(p.businessId());
   }
 
   public CategoryResponse getById(UUID id, UserPrincipal p) {
@@ -63,20 +67,22 @@ public class CategoryService {
     c.setName(r.name());
     c.setColor(r.color());
     c.setSortOrder(r.sortOrder());
-    return map(repo.save(c));
+    CategoryResponse updated = map(repo.save(c));
+    cachedLookups.evictCategories(p.businessId());
+    return updated;
   }
 
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.CATEGORIES_DELETE);
     Category c = find(id, p);
-    long productCount =
-        productRepo.countByBusinessIdAndCategoryIdAndIsActive(p.businessId(), id, true);
+    long productCount = productRepo.countByBusinessIdAndCategoryIdAndIsActive(p.businessId(), id, true);
     if (productCount > 0) {
       throw new BusinessRuleException(
           "Impossible de supprimer cette catégorie : " + productCount + " produit(s) l'utilisent.");
     }
     repo.delete(c);
+    cachedLookups.evictCategories(p.businessId());
   }
 
   private Category find(UUID id, UserPrincipal p) {
@@ -86,7 +92,8 @@ public class CategoryService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess())
+      throw new AccessDeniedException("Business context required");
   }
 
   private CategoryResponse map(Category c) {

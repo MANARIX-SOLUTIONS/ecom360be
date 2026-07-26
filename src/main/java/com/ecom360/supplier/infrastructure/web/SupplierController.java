@@ -39,11 +39,17 @@ public class SupplierController {
   public ResponseEntity<PageResponse<SupplierResponse>> list(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String search,
       @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(
         PageResponse.of(
             svc.list(
-                p, PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending()))));
+                p,
+                search,
+                PageRequest.of(
+                    page,
+                    Math.min(size, ApiConstants.MAX_PAGE_SIZE),
+                    Sort.by("createdAt").descending()))));
   }
 
   @GetMapping("/{id}")

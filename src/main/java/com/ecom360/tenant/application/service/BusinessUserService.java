@@ -10,6 +10,7 @@ import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceAlreadyExistsException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
+import com.ecom360.shared.infrastructure.cache.CachedLookups;
 import com.ecom360.shared.infrastructure.mail.EmailService;
 import com.ecom360.store.application.dto.StoreResponse;
 import com.ecom360.store.domain.model.Store;
@@ -50,6 +51,7 @@ public class BusinessUserService {
   private final EmailService emailService;
   private final RolePermissionService permissionService;
   private final BusinessRoleRepository businessRoleRepository;
+  private final CachedLookups cachedLookups;
 
   public BusinessUserService(
       BusinessUserRepository businessUserRepository,
@@ -62,7 +64,8 @@ public class BusinessUserService {
       AuthService authService,
       EmailService emailService,
       RolePermissionService permissionService,
-      BusinessRoleRepository businessRoleRepository) {
+      BusinessRoleRepository businessRoleRepository,
+      CachedLookups cachedLookups) {
     this.businessUserRepository = businessUserRepository;
     this.businessUserStoreRepository = businessUserStoreRepository;
     this.userRepository = userRepository;
@@ -74,6 +77,7 @@ public class BusinessUserService {
     this.emailService = emailService;
     this.permissionService = permissionService;
     this.businessRoleRepository = businessRoleRepository;
+    this.cachedLookups = cachedLookups;
   }
 
   public List<BusinessUserResponse> list(UserPrincipal p) {
@@ -82,10 +86,9 @@ public class BusinessUserService {
     return businessUserRepository.findByBusinessIdAndIsActive(p.businessId(), true).stream()
         .map(
             bu -> {
-              User u =
-                  userRepository
-                      .findById(bu.getUserId())
-                      .orElseThrow(() -> new ResourceNotFoundException("User", bu.getUserId()));
+              User u = userRepository
+                  .findById(bu.getUserId())
+                  .orElseThrow(() -> new ResourceNotFoundException("User", bu.getUserId()));
               return new BusinessUserResponse(
                   bu.getId(),
                   bu.getUserId(),
@@ -107,8 +110,7 @@ public class BusinessUserService {
         .ifPresent(
             plan -> {
               if (!plan.isUnlimited(plan.getMaxUsers())) {
-                long count =
-                    businessUserRepository.findByBusinessIdAndIsActive(p.businessId(), true).size();
+                long count = businessUserRepository.findByBusinessIdAndIsActive(p.businessId(), true).size();
                 if (count >= plan.getMaxUsers()) {
                   throw new BusinessRuleException(
                       "Limite du plan atteinte : maximum "
@@ -142,11 +144,10 @@ public class BusinessUserService {
       throw new ResourceAlreadyExistsException("User", req.email() + " is already a member");
     }
     String roleCode = RoleCodeNormalizer.toBusinessRoleCode(req.role());
-    BusinessRole role =
-        businessRoleRepository
-            .findByBusinessIdAndCode(p.businessId(), roleCode)
-            .orElseThrow(
-                () -> new BusinessRuleException("Rôle inconnu pour cette entreprise: " + roleCode));
+    BusinessRole role = businessRoleRepository
+        .findByBusinessIdAndCode(p.businessId(), roleCode)
+        .orElseThrow(
+            () -> new BusinessRuleException("Rôle inconnu pour cette entreprise: " + roleCode));
     BusinessUser bu = BusinessUser.create(p.businessId(), user.getId(), role);
     bu = businessUserRepository.save(bu);
     return new BusinessUserResponse(
@@ -164,48 +165,45 @@ public class BusinessUserService {
       UUID businessUserId, AssignStoresRequest req, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.BUSINESS_USERS_UPDATE);
-    BusinessUser bu =
-        businessUserRepository
-            .findByIdWithRole(businessUserId)
-            .filter(b -> b.getBusinessId().equals(p.businessId()))
-            .orElseThrow(() -> new ResourceNotFoundException("BusinessUser", businessUserId));
+    BusinessUser bu = businessUserRepository
+        .findByIdWithRole(businessUserId)
+        .filter(b -> b.getBusinessId().equals(p.businessId()))
+        .orElseThrow(() -> new ResourceNotFoundException("BusinessUser", businessUserId));
     businessUserStoreRepository.deleteByBusinessUserId(bu.getId());
     if (!req.storeIds().isEmpty()) {
       for (UUID storeId : req.storeIds()) {
-        Store store =
-            storeRepository
-                .findById(storeId)
-                .filter(s -> s.belongsTo(p.businessId()))
-                .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+        Store store = storeRepository
+            .findById(storeId)
+            .filter(s -> s.belongsTo(p.businessId()))
+            .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
         businessUserStoreRepository.save(BusinessUserStore.create(bu.getId(), store.getId()));
       }
     }
+    cachedLookups.evictAllStores();
     return getAssignedStores(businessUserId, p);
   }
 
   public List<StoreResponse> getAssignedStores(UUID businessUserId, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.BUSINESS_USERS_READ);
-    BusinessUser bu =
-        businessUserRepository
-            .findByIdWithRole(businessUserId)
-            .filter(b -> b.getBusinessId().equals(p.businessId()))
-            .orElseThrow(() -> new ResourceNotFoundException("BusinessUser", businessUserId));
+    BusinessUser bu = businessUserRepository
+        .findByIdWithRole(businessUserId)
+        .filter(b -> b.getBusinessId().equals(p.businessId()))
+        .orElseThrow(() -> new ResourceNotFoundException("BusinessUser", businessUserId));
     return businessUserStoreRepository.findByBusinessUserId(bu.getId()).stream()
         .map(BusinessUserStore::getStoreId)
         .map(id -> storeRepository.findById(id).orElse(null))
         .filter(s -> s != null && s.belongsTo(p.businessId()))
         .map(
-            s ->
-                new StoreResponse(
-                    s.getId(),
-                    s.getBusinessId(),
-                    s.getName(),
-                    s.getAddress(),
-                    s.getPhone(),
-                    s.getIsActive(),
-                    s.getCreatedAt(),
-                    s.getUpdatedAt()))
+            s -> new StoreResponse(
+                s.getId(),
+                s.getBusinessId(),
+                s.getName(),
+                s.getAddress(),
+                s.getPhone(),
+                s.getIsActive(),
+                s.getCreatedAt(),
+                s.getUpdatedAt()))
         .toList();
   }
 

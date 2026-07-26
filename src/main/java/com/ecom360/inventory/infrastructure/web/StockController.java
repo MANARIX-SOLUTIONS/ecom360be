@@ -42,10 +42,24 @@ public class StockController {
   }
 
   @GetMapping("/store/{storeId}")
-  @Operation(summary = "Stock levels by store")
-  public ResponseEntity<List<StockLevelResponse>> byStore(
-      @PathVariable UUID storeId, @AuthenticationPrincipal UserPrincipal p) {
-    return ResponseEntity.ok(svc.getStockByStore(storeId, p));
+  @Operation(summary = "Stock levels by store (paginated; optional search / productIds)")
+  public ResponseEntity<?> byStore(
+      @PathVariable UUID storeId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) List<UUID> productIds,
+      @AuthenticationPrincipal UserPrincipal p) {
+    if (productIds != null && !productIds.isEmpty()) {
+      return ResponseEntity.ok(svc.getStockByStoreAndProducts(storeId, productIds, p));
+    }
+    return ResponseEntity.ok(
+        PageResponse.of(
+            svc.getStockByStore(
+                storeId,
+                search,
+                p,
+                PageRequest.of(page, Math.min(size, ApiConstants.MAX_PAGE_SIZE)))));
   }
 
   @GetMapping("/product/{productId}/store/{storeId}")

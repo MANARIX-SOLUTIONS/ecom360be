@@ -3,6 +3,7 @@ package com.ecom360.admin.application.service;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
+import com.ecom360.shared.infrastructure.cache.CachedLookups;
 import com.ecom360.store.application.dto.StoreRequest;
 import com.ecom360.store.application.dto.StoreResponse;
 import com.ecom360.store.domain.model.Store;
@@ -20,14 +21,17 @@ public class AdminStoreService {
   private final BusinessRepository businessRepository;
   private final StoreRepository storeRepository;
   private final SubscriptionService subscriptionService;
+  private final CachedLookups cachedLookups;
 
   public AdminStoreService(
       BusinessRepository businessRepository,
       StoreRepository storeRepository,
-      SubscriptionService subscriptionService) {
+      SubscriptionService subscriptionService,
+      CachedLookups cachedLookups) {
     this.businessRepository = businessRepository;
     this.storeRepository = storeRepository;
     this.subscriptionService = subscriptionService;
+    this.cachedLookups = cachedLookups;
   }
 
   public List<StoreResponse> list(UUID businessId, UserPrincipal p) {
@@ -47,7 +51,9 @@ public class AdminStoreService {
     subscriptionService.assertCanAddStore(
         businessId, storeRepository.findByBusinessId(businessId).size());
     Store s = Store.create(businessId, req.name(), req.address(), req.phone());
-    return map(storeRepository.save(s));
+    StoreResponse created = map(storeRepository.save(s));
+    cachedLookups.evictAllStores();
+    return created;
   }
 
   @Transactional
@@ -61,7 +67,9 @@ public class AdminStoreService {
     s.setAddress(req.address());
     s.setPhone(req.phone());
     s.setIsActive(req.isActive());
-    return map(storeRepository.save(s));
+    StoreResponse updated = map(storeRepository.save(s));
+    cachedLookups.evictAllStores();
+    return updated;
   }
 
   @Transactional
@@ -71,6 +79,7 @@ public class AdminStoreService {
         .findById(businessId)
         .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     storeRepository.delete(findStore(businessId, storeId));
+    cachedLookups.evictAllStores();
   }
 
   private Store findStore(UUID businessId, UUID storeId) {

@@ -11,7 +11,10 @@ import com.ecom360.inventory.domain.repository.*;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.model.Store;
 import com.ecom360.store.domain.repository.StoreRepository;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -116,11 +119,27 @@ public class StockService {
     return mapMov(m);
   }
 
-  public List<StockLevelResponse> getStockByStore(UUID storeId, UserPrincipal p) {
+  public Page<StockLevelResponse> getStockByStore(
+      UUID storeId, String search, UserPrincipal p, Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.STOCK_READ);
     verifyStore(storeId, p.businessId());
-    return stockRepo.findByStoreId(storeId).stream().map(this::mapLevel).toList();
+    Page<ProductStoreStock> page = search != null && !search.isBlank()
+        ? stockRepo.searchByStoreId(storeId, search.trim(), pg)
+        : stockRepo.findByStoreId(storeId, pg);
+    return mapLevels(page);
+  }
+
+  /** Stock levels for a set of products in a store (products list page). */
+  public List<StockLevelResponse> getStockByStoreAndProducts(
+      UUID storeId, Collection<UUID> productIds, UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.STOCK_READ);
+    verifyStore(storeId, p.businessId());
+    if (productIds == null || productIds.isEmpty()) {
+      return List.of();
+    }
+    return mapLevels(stockRepo.findByStoreIdAndProductIdIn(storeId, productIds));
   }
 
   public StockLevelResponse getStockLevel(UUID productId, UUID storeId, UserPrincipal p) {
@@ -227,9 +246,44 @@ public class StockService {
       throw new AccessDeniedException("Business context required");
   }
 
-  private StockLevelResponse mapLevel(ProductStoreStock s) {
-    Product pr = productRepo.findById(s.getProductId()).orElse(null);
-    Store st = storeRepo.findById(s.getStoreId()).orElse(null);
+  private Page<StockLevelResponse> mapLevels(Page<ProductStoreStock> page) {
+    if (page.isEmpty()) {
+      return page.map(s -> mapLevel(s, Map.of(), Map.of()));
+    }
+    Map<UUID, Product> products = productsById(page.getContent());
+    Map<UUID, Store> stores = storesById(page.getContent());
+    return page.map(s -> mapLevel(s, products, stores));
+  }
+
+  private List<StockLevelResponse> mapLevels(List<ProductStoreStock> rows) {
+    if (rows.isEmpty()) {
+      return List.of();
+    }
+    Map<UUID, Product> products = productsById(rows);
+    Map<UUID, Store> stores = storesById(rows);
+    return rows.stream().map(s -> mapLevel(s, products, stores)).toList();
+  }
+
+  private Map<UUID, Product> productsById(List<ProductStoreStock> rows) {
+    Map<UUID, Product> products = new HashMap<>();
+    for (Product pr : productRepo.findAllById(rows.stream().map(ProductStoreStock::getProductId).distinct().toList())) {
+      products.put(pr.getId(), pr);
+    }
+    return products;
+  }
+
+  private Map<UUID, Store> storesById(List<ProductStoreStock> rows) {
+    Map<UUID, Store> stores = new HashMap<>();
+    for (Store st : storeRepo.findAllById(rows.stream().map(ProductStoreStock::getStoreId).distinct().toList())) {
+      stores.put(st.getId(), st);
+    }
+    return stores;
+  }
+
+  private StockLevelResponse mapLevel(
+      ProductStoreStock s, Map<UUID, Product> products, Map<UUID, Store> stores) {
+    Product pr = products.get(s.getProductId());
+    Store st = stores.get(s.getStoreId());
     return new StockLevelResponse(
         s.getId(),
         s.getProductId(),
@@ -243,6 +297,10 @@ public class StockService {
         pr != null ? pr.getSalePrice() : null,
         pr != null ? pr.getCategoryId() : null,
         pr != null ? pr.getImageUrl() : null);
+  }
+
+  private StockLevelResponse mapLevel(ProductStoreStock s) {
+    return mapLevel(s, productsById(List.of(s)), storesById(List.of(s)));
   }
 
   private StockMovementResponse mapMov(StockMovement m) {

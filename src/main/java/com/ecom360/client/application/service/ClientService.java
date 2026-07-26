@@ -61,10 +61,14 @@ public class ClientService {
     return map(clientRepo.save(c));
   }
 
-  public Page<ClientResponse> list(UserPrincipal p, Pageable pg) {
+  public Page<ClientResponse> list(UserPrincipal p, String search, Pageable pg) {
     requireBiz(p);
     permissionService.require(p, Permission.CLIENTS_READ);
-    return clientRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg).map(this::map);
+    String q = search != null ? search.trim() : "";
+    if (q.isEmpty()) {
+      return clientRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg).map(this::map);
+    }
+    return clientRepo.searchActive(p.businessId(), q, pg).map(this::map);
   }
 
   public ClientResponse getById(UUID id, UserPrincipal p) {
@@ -135,16 +139,15 @@ public class ClientService {
     return paymentRepo
         .findByClientIdOrderByCreatedAtDesc(clientId, pg)
         .map(
-            pay ->
-                new ClientPaymentResponse(
-                    pay.getId(),
-                    pay.getClientId(),
-                    pay.getStoreId(),
-                    pay.getUserId(),
-                    pay.getAmount(),
-                    pay.getPaymentMethod(),
-                    pay.getNote(),
-                    pay.getCreatedAt()));
+            pay -> new ClientPaymentResponse(
+                pay.getId(),
+                pay.getClientId(),
+                pay.getStoreId(),
+                pay.getUserId(),
+                pay.getAmount(),
+                pay.getPaymentMethod(),
+                pay.getNote(),
+                pay.getCreatedAt()));
   }
 
   private Client find(UUID id, UserPrincipal p) {
@@ -154,7 +157,8 @@ public class ClientService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess())
+      throw new AccessDeniedException("Business context required");
   }
 
   private ClientResponse map(Client c) {

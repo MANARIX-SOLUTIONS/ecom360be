@@ -12,8 +12,6 @@ import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.domain.model.ProductStoreStock;
 import com.ecom360.inventory.domain.repository.ProductStoreStockRepository;
-import com.ecom360.sales.domain.model.Sale;
-import com.ecom360.sales.domain.model.SaleLine;
 import com.ecom360.sales.domain.repository.SaleLineRepository;
 import com.ecom360.sales.domain.repository.SaleRepository;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
@@ -38,7 +36,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -100,8 +97,6 @@ public class DashboardService {
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
     LocalDate today = LocalDate.now(ZoneId.systemDefault());
     EffectivePeriod ep = resolveEffectivePeriod(bId, periodStart, periodEnd, planOpt);
-    LocalDate effStart = ep.effStart();
-    LocalDate effEnd = ep.effEnd();
     boolean limitedAnalytics = planOpt.isPresent() && !Boolean.TRUE.equals(planOpt.get().getFeatureReports());
     boolean showLowStock = planOpt.isEmpty() || Boolean.TRUE.equals(planOpt.get().getFeatureStockAlerts());
 
@@ -114,17 +109,12 @@ public class DashboardService {
         : saleRepo.countByBusinessIdAndCreatedAtBetween(bId, todayStart, todayEnd);
 
     PeriodSnapshot current = loadPeriodSnapshot(bId, storeId, ep.effStart(), ep.effEnd());
-    List<Sale> periodSales = current.sales();
     long periodSalesCount = current.salesCount();
     long periodRevenue = current.revenue();
     long periodExpenses = current.expenses();
     long periodProfit = current.profit();
 
-    long todayRevenue = periodSales.stream()
-        .filter(
-            s -> !s.getCreatedAt().isBefore(todayStart) && s.getCreatedAt().isBefore(todayEnd))
-        .mapToLong(s -> s.getTotal() != null ? s.getTotal() : 0)
-        .sum();
+    long todayRevenue = sumCompletedRevenue(bId, storeId, todayStart, todayEnd);
 
     long todayExpenses = storeId != null
         ? expenseRepo.sumAmountByBusinessIdAndStoreIdAndDateBetween(bId, storeId, today, today)
@@ -138,9 +128,9 @@ public class DashboardService {
     long debtorClientsCount = clientRepo.countDebtorsWithPositiveBalance(bId);
     long totalReceivable = clientRepo.sumPositiveCreditBalance(bId);
 
-    long totalProducts = productRepo.findByBusinessId(bId, Pageable.unpaged()).getTotalElements();
-    long totalClients = clientRepo.findByBusinessIdAndIsActive(bId, true, Pageable.unpaged()).getTotalElements();
-    long totalSuppliers = supplierRepo.findByBusinessIdAndIsActive(bId, true, Pageable.unpaged()).getTotalElements();
+    long totalProducts = productRepo.countByBusinessId(bId);
+    long totalClients = clientRepo.countByBusinessIdAndIsActive(bId, true);
+    long totalSuppliers = supplierRepo.countByBusinessIdAndIsActive(bId, true);
     List<Store> businessStores = storeRepo.findByBusinessId(bId);
     long totalStores = businessStores.size();
 
@@ -170,7 +160,10 @@ public class DashboardService {
                 s.getCreatedAt().toString()))
         .toList();
 
-    List<DashboardResponse.TopProduct> allTopProducts = topProductsFromPeriodSales(periodSales);
+    List<Object[]> periodProductRows =
+        saleLineRepo.aggregateProductSalesBetween(bId, storeId, ep.pStart(), ep.pEnd());
+    List<DashboardResponse.TopProduct> allTopProducts =
+        periodProductRows.stream().map(DashboardService::toTopProduct).toList();
     long topProductsTotal = allTopProducts.size();
     List<DashboardResponse.TopProduct> topProducts = allTopProducts.size() <= DASHBOARD_LIST_PREVIEW
         ? allTopProducts
@@ -182,31 +175,23 @@ public class DashboardService {
         .orElse(null);
 
     if (planOpt.isPresent() && Boolean.TRUE.equals(planOpt.get().getFeatureAdvancedReports())) {
+      Map<UUID, Integer> costByProduct = costByProduct(periodProductRows);
       long gm = 0;
-      Map<UUID, Long> marginByProduct = new HashMap<>();
-      for (Sale sale : periodSales) {
-        if (!sale.isCompleted())
-          continue;
-        for (SaleLine line : saleLineRepo.findBySaleId(sale.getId())) {
-          Product pr = productRepo.findById(line.getProductId()).orElse(null);
-          int cost = pr != null ? pr.getCostPrice() : 0;
-          int lineRev = line.getLineTotal();
-          long lineCost = (long) cost * line.getQuantity();
-          long m = lineRev - lineCost;
-          gm += m;
-          marginByProduct.merge(line.getProductId(), m, Long::sum);
-        }
+      List<DashboardResponse.TopMarginProduct> margins = new ArrayList<>(periodProductRows.size());
+      for (Object[] row : periodProductRows) {
+        UUID productId = (UUID) row[0];
+        String productName = (String) row[1];
+        long quantity = asLong(row[2]);
+        long lineRevenue = asLong(row[3]);
+        long lineCost = (long) costByProduct.getOrDefault(productId, 0) * quantity;
+        long margin = lineRevenue - lineCost;
+        gm += margin;
+        margins.add(new DashboardResponse.TopMarginProduct(productId, productName, margin));
       }
       periodGrossMargin = gm;
-      topMarginProducts = marginByProduct.entrySet().stream()
-          .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+      topMarginProducts = margins.stream()
+          .sorted(Comparator.comparingLong(DashboardResponse.TopMarginProduct::marginAmount).reversed())
           .limit(10)
-          .map(
-              e -> {
-                Product pr = productRepo.findById(e.getKey()).orElse(null);
-                return new DashboardResponse.TopMarginProduct(
-                    e.getKey(), pr != null ? pr.getName() : "?", e.getValue());
-              })
           .toList();
     }
 
@@ -258,7 +243,10 @@ public class DashboardService {
     UUID bId = p.businessId();
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
     EffectivePeriod ep = resolveEffectivePeriod(bId, periodStart, periodEnd, planOpt);
-    List<DashboardResponse.TopProduct> all = buildTopProductsForPeriod(bId, storeId, ep.pStart(), ep.pEnd());
+    List<DashboardResponse.TopProduct> all =
+        saleLineRepo.aggregateProductSalesBetween(bId, storeId, ep.pStart(), ep.pEnd()).stream()
+            .map(DashboardService::toTopProduct)
+            .toList();
     return sliceList(all, page, size);
   }
 
@@ -310,15 +298,9 @@ public class DashboardService {
     for (Store s : stores)
       storeNames.put(s.getId(), s.getName());
 
-    List<Sale> periodSales = saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, Pageable.unpaged()).stream()
-        .filter(
-            s -> s.isCompleted()
-                && !s.getCreatedAt().isBefore(pStart)
-                && s.getCreatedAt().isBefore(pEnd))
-        .toList();
-
-    long totalRevenue = periodSales.stream().mapToLong(s -> s.getTotal() != null ? s.getTotal() : 0).sum();
-    long totalSalesCount = periodSales.size();
+    PeriodTotals periodTotals = loadPeriodTotals(bId, null, pStart, pEnd);
+    long totalRevenue = periodTotals.revenue();
+    long totalSalesCount = periodTotals.salesCount();
     double averageBasket = totalSalesCount > 0 ? (double) totalRevenue / totalSalesCount : 0;
     long totalExpenses = expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, effStart, effEnd);
     long totalProfit = totalRevenue - totalExpenses;
@@ -330,45 +312,13 @@ public class DashboardService {
         totalRevenue,
         totalExpenses);
 
-    List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
-    if (showLowStockGlobal) {
-      for (Store store : stores) {
-        for (ProductStoreStock s : stockRepo.findByStoreId(store.getId())) {
-          if (s.isLowStock()) {
-            Product pr = productRepo.findById(s.getProductId()).orElse(null);
-            lowStock.add(
-                new DashboardResponse.LowStockItem(
-                    s.getProductId(),
-                    pr != null ? pr.getName() : "Unknown",
-                    store.getName(),
-                    s.getQuantity(),
-                    s.getMinStock()));
-          }
-        }
-      }
-    }
+    List<DashboardResponse.LowStockItem> lowStock = buildLowStockItems(null, showLowStockGlobal, stores);
 
-    Map<UUID, long[]> productStats = new HashMap<>();
-    for (Sale sale : periodSales) {
-      for (SaleLine line : saleLineRepo.findBySaleId(sale.getId())) {
-        productStats.computeIfAbsent(line.getProductId(), k -> new long[] { 0, 0 });
-        productStats.get(line.getProductId())[0] += line.getQuantity();
-        productStats.get(line.getProductId())[1] += line.getLineTotal();
-      }
-    }
-    List<DashboardResponse.TopProduct> topProducts = productStats.entrySet().stream()
-        .sorted((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]))
-        .limit(10)
-        .map(
-            e -> {
-              Product pr = productRepo.findById(e.getKey()).orElse(null);
-              return new DashboardResponse.TopProduct(
-                  e.getKey(),
-                  pr != null ? pr.getName() : "Unknown",
-                  e.getValue()[0],
-                  e.getValue()[1]);
-            })
-        .toList();
+    List<DashboardResponse.TopProduct> topProducts =
+        saleLineRepo.aggregateProductSalesBetween(bId, null, pStart, pEnd).stream()
+            .limit(10)
+            .map(DashboardService::toTopProduct)
+            .toList();
 
     return new GlobalViewResponse(
         effStart,
@@ -384,36 +334,144 @@ public class DashboardService {
         topProducts);
   }
 
-  private record PeriodSnapshot(
-      long revenue, long salesCount, long expenses, long profit, List<Sale> sales) {
+  private List<GlobalViewResponse.StoreStats> buildStoreStats(
+      Map<UUID, String> storeNames,
+      List<Object[]> salesRows,
+      List<Object[]> expenseRows,
+      long totalRevenue,
+      long totalExpenses) {
+    Map<UUID, long[]> salesByStore = new HashMap<>();
+    for (Object[] row : salesRows) {
+      UUID storeId = (UUID) row[0];
+      long revenue = row[1] instanceof Number n ? n.longValue() : 0L;
+      long count = row[2] instanceof Number n ? n.longValue() : 0L;
+      salesByStore.put(storeId, new long[] { revenue, count });
+    }
+
+    Map<UUID, Long> expensesByStore = new HashMap<>();
+    long unassignedExpenses = 0L;
+    for (Object[] row : expenseRows) {
+      UUID storeId = (UUID) row[0];
+      long amount = row[1] instanceof Number n ? n.longValue() : 0L;
+      if (storeId == null) {
+        unassignedExpenses = amount;
+      } else {
+        expensesByStore.put(storeId, amount);
+      }
+    }
+
+    Set<UUID> activeStoreIds = new HashSet<>();
+    activeStoreIds.addAll(salesByStore.keySet());
+    activeStoreIds.addAll(expensesByStore.keySet());
+
+    List<GlobalViewResponse.StoreStats> stats = new ArrayList<>();
+    for (UUID storeId : activeStoreIds) {
+      long[] sales = salesByStore.getOrDefault(storeId, new long[] { 0, 0 });
+      long revenue = sales[0];
+      long salesCount = sales[1];
+      long expenses = expensesByStore.getOrDefault(storeId, 0L);
+      stats.add(
+          new GlobalViewResponse.StoreStats(
+              storeId,
+              storeNames.getOrDefault(storeId, "Boutique"),
+              revenue,
+              salesCount,
+              roundSharePercent(totalRevenue, revenue),
+              expenses,
+              revenue - expenses,
+              roundSharePercent(totalExpenses, expenses)));
+    }
+
+    if (unassignedExpenses > 0) {
+      stats.add(
+          new GlobalViewResponse.StoreStats(
+              null,
+              "Communes",
+              0,
+              0,
+              0,
+              unassignedExpenses,
+              -unassignedExpenses,
+              roundSharePercent(totalExpenses, unassignedExpenses)));
+    }
+
+    stats.sort(
+        Comparator.comparingLong(GlobalViewResponse.StoreStats::revenue)
+            .reversed()
+            .thenComparingLong(GlobalViewResponse.StoreStats::expenses)
+            .reversed());
+    return stats;
+  }
+
+  private static double roundSharePercent(long total, long part) {
+    return total > 0 ? Math.round(1000.0 * part / total) / 10.0 : 0;
+  }
+
+  private record PeriodSnapshot(long revenue, long salesCount, long expenses, long profit) {
+  }
+
+  private record PeriodTotals(long revenue, long salesCount) {
+  }
+
+  private record LowStockEntry(UUID productId, String storeName, int quantity, int minStock) {
   }
 
   /**
    * Agrège ventes complétées et dépenses sur {@code effStart}–{@code effEnd}
-   * inclus (dates locales).
+   * inclus (dates locales) via des requêtes SQL, sans matérialiser les ventes.
    */
   private PeriodSnapshot loadPeriodSnapshot(
       UUID bId, UUID storeId, LocalDate effStart, LocalDate effEnd) {
     Instant pStart = effStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
     Instant pEnd = effEnd.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
-    Pageable all = Pageable.unpaged();
-    List<Sale> sales = (storeId != null
-        ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(bId, storeId, all)
-        : saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, all))
-        .stream()
-        .filter(
-            s -> s.isCompleted()
-                && !s.getCreatedAt().isBefore(pStart)
-                && s.getCreatedAt().isBefore(pEnd))
-        .toList();
-    long revenue = sales.stream().mapToLong(s -> s.getTotal() != null ? s.getTotal() : 0).sum();
-    long salesCount = sales.size();
+    PeriodTotals totals = loadPeriodTotals(bId, storeId, pStart, pEnd);
     long expenses = storeId != null
         ? expenseRepo.sumAmountByBusinessIdAndStoreIdAndDateBetween(
             bId, storeId, effStart, effEnd)
         : expenseRepo.sumAmountByBusinessIdAndDateBetween(bId, effStart, effEnd);
-    long profit = revenue - expenses;
-    return new PeriodSnapshot(revenue, salesCount, expenses, profit, sales);
+    return new PeriodSnapshot(
+        totals.revenue(), totals.salesCount(), expenses, totals.revenue() - expenses);
+  }
+
+  private PeriodTotals loadPeriodTotals(UUID bId, UUID storeId, Instant start, Instant end) {
+    Object[] row = saleRepo.sumRevenueAndCountBetween(bId, storeId, start, end);
+    return new PeriodTotals(revenueOf(row), countOf(row));
+  }
+
+  private long sumCompletedRevenue(UUID bId, UUID storeId, Instant start, Instant end) {
+    return revenueOf(saleRepo.sumRevenueAndCountBetween(bId, storeId, start, end));
+  }
+
+  private Map<UUID, Integer> costByProduct(List<Object[]> productRows) {
+    Set<UUID> productIds = new HashSet<>();
+    for (Object[] row : productRows) {
+      productIds.add((UUID) row[0]);
+    }
+    if (productIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<UUID, Integer> costByProduct = new HashMap<>();
+    for (Product product : productRepo.findAllById(productIds)) {
+      costByProduct.put(product.getId(), product.getCostPrice());
+    }
+    return costByProduct;
+  }
+
+  private static DashboardResponse.TopProduct toTopProduct(Object[] row) {
+    return new DashboardResponse.TopProduct(
+        (UUID) row[0], (String) row[1], asLong(row[2]), asLong(row[3]));
+  }
+
+  private static long revenueOf(Object[] row) {
+    return row != null && row.length > 0 ? asLong(row[0]) : 0L;
+  }
+
+  private static long countOf(Object[] row) {
+    return row != null && row.length > 1 ? asLong(row[1]) : 0L;
+  }
+
+  private static long asLong(Object value) {
+    return value instanceof Number n ? n.longValue() : 0L;
   }
 
   private record EffectivePeriod(
@@ -438,50 +496,6 @@ public class DashboardService {
     return new EffectivePeriod(effStart, effEnd, pStart, pEnd);
   }
 
-  private List<DashboardResponse.TopProduct> buildTopProductsForPeriod(
-      UUID bId, UUID storeId, Instant pStart, Instant pEnd) {
-    Pageable all = Pageable.unpaged();
-    List<Sale> periodSales = (storeId != null
-        ? saleRepo.findByBusinessIdAndStoreIdOrderByCreatedAtDesc(bId, storeId, all)
-        : saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, all))
-        .stream()
-        .filter(
-            s -> s.isCompleted()
-                && !s.getCreatedAt().isBefore(pStart)
-                && s.getCreatedAt().isBefore(pEnd))
-        .toList();
-    return topProductsFromPeriodSales(periodSales);
-  }
-
-  private List<DashboardResponse.TopProduct> topProductsFromPeriodSales(List<Sale> periodSales) {
-    Map<UUID, long[]> productStats = new HashMap<>();
-    for (Sale sale : periodSales) {
-      for (SaleLine line : saleLineRepo.findBySaleId(sale.getId())) {
-        productStats.computeIfAbsent(line.getProductId(), k -> new long[] { 0, 0 });
-        productStats.get(line.getProductId())[0] += line.getQuantity();
-        productStats.get(line.getProductId())[1] += line.getLineTotal();
-      }
-    }
-    return productStats.entrySet().stream()
-        .sorted(
-            (a, b) -> {
-              int cmp = Long.compare(b.getValue()[1], a.getValue()[1]);
-              if (cmp != 0)
-                return cmp;
-              return a.getKey().toString().compareTo(b.getKey().toString());
-            })
-        .map(
-            e -> {
-              Product pr = productRepo.findById(e.getKey()).orElse(null);
-              return new DashboardResponse.TopProduct(
-                  e.getKey(),
-                  pr != null ? pr.getName() : "Unknown",
-                  e.getValue()[0],
-                  e.getValue()[1]);
-            })
-        .toList();
-  }
-
   private List<DashboardResponse.LowStockItem> buildLowStockItems(
       UUID storeId, boolean showLowStock, List<Store> businessStores) {
     List<DashboardResponse.LowStockItem> lowStock = new ArrayList<>();
@@ -491,19 +505,35 @@ public class DashboardService {
     List<Store> storesForStock = storeId != null
         ? businessStores.stream().filter(s -> s.getId().equals(storeId)).toList()
         : businessStores;
+
+    List<LowStockEntry> entries = new ArrayList<>();
+    Set<UUID> productIds = new HashSet<>();
     for (Store store : storesForStock) {
       for (ProductStoreStock s : stockRepo.findByStoreId(store.getId())) {
         if (s.isLowStock()) {
-          Product pr = productRepo.findById(s.getProductId()).orElse(null);
-          lowStock.add(
-              new DashboardResponse.LowStockItem(
-                  s.getProductId(),
-                  pr != null ? pr.getName() : "Unknown",
-                  store.getName(),
-                  s.getQuantity(),
-                  s.getMinStock()));
+          entries.add(
+              new LowStockEntry(
+                  s.getProductId(), store.getName(), s.getQuantity(), s.getMinStock()));
+          productIds.add(s.getProductId());
         }
       }
+    }
+
+    Map<UUID, String> productNames = new HashMap<>();
+    if (!productIds.isEmpty()) {
+      for (Product pr : productRepo.findAllById(productIds)) {
+        productNames.put(pr.getId(), pr.getName());
+      }
+    }
+
+    for (LowStockEntry e : entries) {
+      lowStock.add(
+          new DashboardResponse.LowStockItem(
+              e.productId(),
+              productNames.getOrDefault(e.productId(), "Unknown"),
+              e.storeName(),
+              e.quantity(),
+              e.minStock()));
     }
     lowStock.sort(
         Comparator.comparing(DashboardResponse.LowStockItem::storeName)
