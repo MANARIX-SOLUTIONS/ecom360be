@@ -12,10 +12,12 @@ import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping(ApiConstants.API_BASE + "/products")
@@ -70,6 +72,16 @@ public class ProductController {
       @Valid @RequestBody ProductRequest r,
       @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(svc.update(id, r, p));
+  }
+
+  @PostMapping(value = "/{id}/image/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAuthority('PRODUCTS_UPDATE') or hasRole('PLATFORM_ADMIN')")
+  @Operation(summary = "Upload product image")
+  public ResponseEntity<ProductResponse> uploadImage(
+      @PathVariable UUID id,
+      @RequestPart("file") MultipartFile file,
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(svc.uploadImage(id, file, p));
   }
 
   @DeleteMapping("/{id}")

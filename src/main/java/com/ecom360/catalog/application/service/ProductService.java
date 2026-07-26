@@ -5,6 +5,7 @@ import com.ecom360.catalog.application.dto.*;
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.CategoryRepository;
 import com.ecom360.catalog.domain.repository.ProductRepository;
+import com.ecom360.catalog.infrastructure.storage.ProductImageStorageService;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ProductService {
@@ -27,6 +29,7 @@ public class ProductService {
   private final RolePermissionService permissionService;
   private final AuditLogService auditLogService;
   private final StoreRepository storeRepository;
+  private final ProductImageStorageService productImageStorageService;
 
   public ProductService(
       ProductRepository productRepo,
@@ -34,13 +37,15 @@ public class ProductService {
       SubscriptionService subscriptionService,
       RolePermissionService permissionService,
       AuditLogService auditLogService,
-      StoreRepository storeRepository) {
+      StoreRepository storeRepository,
+      ProductImageStorageService productImageStorageService) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
     this.auditLogService = auditLogService;
     this.storeRepository = storeRepository;
+    this.productImageStorageService = productImageStorageService;
   }
 
   public ProductResponse create(ProductRequest r, UserPrincipal p) {
@@ -68,11 +73,10 @@ public class ProductService {
         && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
             .noneMatch(c -> c.getId().equals(r.categoryId())))
       throw new ResourceNotFoundException("Category", r.categoryId());
-    Store store =
-        storeRepository
-            .findById(r.storeId())
-            .filter(s -> s.belongsTo(p.businessId()))
-            .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+    Store store = storeRepository
+        .findById(r.storeId())
+        .filter(s -> s.belongsTo(p.businessId()))
+        .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
     Product prod = new Product();
     prod.setBusinessId(p.businessId());
     prod.setStoreId(store.getId());
@@ -99,22 +103,19 @@ public class ProductService {
     permissionService.require(p, Permission.PRODUCTS_READ);
     Page<Product> page;
     if (storeId != null) {
-      Store store =
-          storeRepository
-              .findById(storeId)
-              .filter(s -> s.belongsTo(p.businessId()))
-              .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
-      page =
-          (search != null && !search.isBlank())
-              ? productRepo.searchByBusinessIdAndStoreId(
-                  p.businessId(), store.getId(), search.trim(), pg)
-              : productRepo.findByBusinessIdAndStoreIdAndIsActive(
-                  p.businessId(), store.getId(), true, pg);
+      Store store = storeRepository
+          .findById(storeId)
+          .filter(s -> s.belongsTo(p.businessId()))
+          .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+      page = (search != null && !search.isBlank())
+          ? productRepo.searchByBusinessIdAndStoreId(
+              p.businessId(), store.getId(), search.trim(), pg)
+          : productRepo.findByBusinessIdAndStoreIdAndIsActive(
+              p.businessId(), store.getId(), true, pg);
     } else {
-      page =
-          (search != null && !search.isBlank())
-              ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
-              : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
+      page = (search != null && !search.isBlank())
+          ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
+          : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
     }
     return page.map(this::map);
   }
@@ -134,17 +135,40 @@ public class ProductService {
             .noneMatch(c -> c.getId().equals(r.categoryId())))
       throw new ResourceNotFoundException("Category", r.categoryId());
     if (r.storeId() != null && !r.storeId().equals(prod.getStoreId())) {
-      Store store =
-          storeRepository
-              .findById(r.storeId())
-              .filter(s -> s.belongsTo(p.businessId()))
-              .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+      Store store = storeRepository
+          .findById(r.storeId())
+          .filter(s -> s.belongsTo(p.businessId()))
+          .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
       prod.setStoreId(store.getId());
     }
+    String previousImageUrl = prod.getImageUrl();
     applyFields(prod, r);
+    if (previousImageUrl != null
+        && (r.imageUrl() == null || r.imageUrl().isBlank())) {
+      productImageStorageService.deleteManagedImageIfPresent(p.businessId(), previousImageUrl);
+    }
     Product saved = productRepo.save(prod);
     auditLogService.logAsync(
         p.businessId(), p.userId(), "UPDATE", "Product", id, Map.of("name", saved.getName()));
+    return map(saved);
+  }
+
+  @Transactional
+  public ProductResponse uploadImage(UUID id, MultipartFile file, UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.PRODUCTS_UPDATE);
+    Product prod = find(id, p);
+    productImageStorageService.deleteManagedImageIfPresent(p.businessId(), prod.getImageUrl());
+    String relative = productImageStorageService.saveUploadedImage(p.businessId(), file);
+    prod.setImageUrl(relative);
+    Product saved = productRepo.save(prod);
+    auditLogService.logAsync(
+        p.businessId(),
+        p.userId(),
+        "UPDATE",
+        "Product",
+        id,
+        Map.of("name", saved.getName(), "action", "image_upload"));
     return map(saved);
   }
 
@@ -154,7 +178,9 @@ public class ProductService {
     Product prod = find(id, p);
     auditLogService.logAsync(
         p.businessId(), p.userId(), "DELETE", "Product", id, Map.of("name", prod.getName()));
+    productImageStorageService.deleteManagedImageIfPresent(p.businessId(), prod.getImageUrl());
     prod.setIsActive(false);
+    prod.setImageUrl(null);
     productRepo.save(prod);
   }
 
@@ -165,7 +191,8 @@ public class ProductService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess())
+      throw new AccessDeniedException("Business context required");
   }
 
   private void applyFields(Product prod, ProductRequest r) {
