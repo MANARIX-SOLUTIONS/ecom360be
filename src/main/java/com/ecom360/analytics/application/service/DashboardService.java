@@ -160,10 +160,9 @@ public class DashboardService {
                 s.getCreatedAt().toString()))
         .toList();
 
-    List<Object[]> periodProductRows =
-        saleLineRepo.aggregateProductSalesBetween(bId, storeId, ep.pStart(), ep.pEnd());
-    List<DashboardResponse.TopProduct> allTopProducts =
-        periodProductRows.stream().map(DashboardService::toTopProduct).toList();
+    List<Object[]> periodProductRows = saleLineRepo.aggregateProductSalesBetween(bId, storeId, ep.pStart(), ep.pEnd());
+    List<DashboardResponse.TopProduct> allTopProducts = periodProductRows.stream().map(DashboardService::toTopProduct)
+        .toList();
     long topProductsTotal = allTopProducts.size();
     List<DashboardResponse.TopProduct> topProducts = allTopProducts.size() <= DASHBOARD_LIST_PREVIEW
         ? allTopProducts
@@ -243,10 +242,10 @@ public class DashboardService {
     UUID bId = p.businessId();
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(bId);
     EffectivePeriod ep = resolveEffectivePeriod(bId, periodStart, periodEnd, planOpt);
-    List<DashboardResponse.TopProduct> all =
-        saleLineRepo.aggregateProductSalesBetween(bId, storeId, ep.pStart(), ep.pEnd()).stream()
-            .map(DashboardService::toTopProduct)
-            .toList();
+    List<DashboardResponse.TopProduct> all = saleLineRepo
+        .aggregateProductSalesBetween(bId, storeId, ep.pStart(), ep.pEnd()).stream()
+        .map(DashboardService::toTopProduct)
+        .toList();
     return sliceList(all, page, size);
   }
 
@@ -314,11 +313,11 @@ public class DashboardService {
 
     List<DashboardResponse.LowStockItem> lowStock = buildLowStockItems(null, showLowStockGlobal, stores);
 
-    List<DashboardResponse.TopProduct> topProducts =
-        saleLineRepo.aggregateProductSalesBetween(bId, null, pStart, pEnd).stream()
-            .limit(10)
-            .map(DashboardService::toTopProduct)
-            .toList();
+    List<DashboardResponse.TopProduct> topProducts = saleLineRepo.aggregateProductSalesBetween(bId, null, pStart, pEnd)
+        .stream()
+        .limit(10)
+        .map(DashboardService::toTopProduct)
+        .toList();
 
     return new GlobalViewResponse(
         effStart,
@@ -334,6 +333,10 @@ public class DashboardService {
         topProducts);
   }
 
+  /**
+   * Agrège CA / ventes / dépenses / résultat par boutique. Les dépenses sans
+   * storeId apparaissent comme ligne « Communes ».
+   */
   private List<GlobalViewResponse.StoreStats> buildStoreStats(
       Map<UUID, String> storeNames,
       List<Object[]> salesRows,
@@ -342,6 +345,9 @@ public class DashboardService {
       long totalExpenses) {
     Map<UUID, long[]> salesByStore = new HashMap<>();
     for (Object[] row : salesRows) {
+      if (row == null || row.length < 3 || row[0] == null) {
+        continue;
+      }
       UUID storeId = (UUID) row[0];
       long revenue = row[1] instanceof Number n ? n.longValue() : 0L;
       long count = row[2] instanceof Number n ? n.longValue() : 0L;
@@ -351,6 +357,9 @@ public class DashboardService {
     Map<UUID, Long> expensesByStore = new HashMap<>();
     long unassignedExpenses = 0L;
     for (Object[] row : expenseRows) {
+      if (row == null || row.length < 2) {
+        continue;
+      }
       UUID storeId = (UUID) row[0];
       long amount = row[1] instanceof Number n ? n.longValue() : 0L;
       if (storeId == null) {
@@ -552,65 +561,5 @@ public class DashboardService {
     int to = Math.min(from + safeSize, (int) total);
     boolean hasNext = to < total;
     return new DashboardSliceResponse<>(all.subList(from, to), total, safePage, safeSize, hasNext);
-  }
-
-  /**
-   * Agrège CA / ventes / dépenses / résultat par boutique. Les dépenses sans
-   * storeId (communes) restent dans le total global mais n'apparaissent pas
-   * dans une ligne boutique.
-   */
-  private List<GlobalViewResponse.StoreStats> buildStoreStats(
-      Map<UUID, String> storeNames,
-      List<Object[]> salesByStoreRows,
-      List<Object[]> expensesByStoreRows,
-      long totalRevenue,
-      long totalExpenses) {
-    Map<UUID, long[]> salesByStore = new HashMap<>();
-    for (Object[] row : salesByStoreRows) {
-      if (row == null || row.length < 3 || row[0] == null) {
-        continue;
-      }
-      UUID storeId = (UUID) row[0];
-      long revenue = row[1] instanceof Number n ? n.longValue() : 0L;
-      long count = row[2] instanceof Number n ? n.longValue() : 0L;
-      salesByStore.put(storeId, new long[] { revenue, count });
-    }
-
-    Map<UUID, Long> expensesByStore = new HashMap<>();
-    for (Object[] row : expensesByStoreRows) {
-      if (row == null || row.length < 2 || row[0] == null) {
-        continue;
-      }
-      UUID storeId = (UUID) row[0];
-      long amount = row[1] instanceof Number n ? n.longValue() : 0L;
-      expensesByStore.put(storeId, amount);
-    }
-
-    List<GlobalViewResponse.StoreStats> result = new ArrayList<>();
-    for (Map.Entry<UUID, String> entry : storeNames.entrySet()) {
-      UUID storeId = entry.getKey();
-      long[] sales = salesByStore.getOrDefault(storeId, new long[] { 0L, 0L });
-      long revenue = sales[0];
-      long salesCount = sales[1];
-      long expenses = expensesByStore.getOrDefault(storeId, 0L);
-      long profit = revenue - expenses;
-      double sharePercent = totalRevenue > 0 ? Math.round(revenue * 1000.0 / totalRevenue) / 10.0 : 0.0;
-      double expenseSharePercent = totalExpenses > 0 ? Math.round(expenses * 1000.0 / totalExpenses) / 10.0 : 0.0;
-      result.add(
-          new GlobalViewResponse.StoreStats(
-              storeId,
-              entry.getValue(),
-              revenue,
-              salesCount,
-              sharePercent,
-              expenses,
-              profit,
-              expenseSharePercent));
-    }
-    result.sort(
-        Comparator.comparingLong(GlobalViewResponse.StoreStats::revenue)
-            .reversed()
-            .thenComparing(GlobalViewResponse.StoreStats::storeName));
-    return result;
   }
 }
