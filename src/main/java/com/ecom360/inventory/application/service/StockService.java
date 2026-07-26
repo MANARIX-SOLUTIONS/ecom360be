@@ -74,46 +74,45 @@ public class StockService {
     permissionService.require(p, Permission.STOCK_ADJUST);
     verifyProduct(r.productId(), p.businessId());
     verifyStore(r.storeId(), p.businessId());
-    ProductStoreStock s =
-        stockRepo
-            .findByProductIdAndStoreId(r.productId(), r.storeId())
-            .orElseGet(
-                () -> {
-                  if (!"adjustment".equals(r.type()))
-                    throw new ResourceNotFoundException("Stock not initialized");
-                  ProductStoreStock n = new ProductStoreStock();
-                  n.setProductId(r.productId());
-                  n.setStoreId(r.storeId());
-                  n.setQuantity(0);
-                  n.setMinStock(0);
-                  return stockRepo.save(n);
-                });
+    ProductStoreStock s = stockRepo
+        .findByProductIdAndStoreId(r.productId(), r.storeId())
+        .orElseGet(
+            () -> {
+              if (!"adjustment".equals(r.type()))
+                throw new ResourceNotFoundException("Stock not initialized");
+              ProductStoreStock n = new ProductStoreStock();
+              n.setProductId(r.productId());
+              n.setStoreId(r.storeId());
+              n.setQuantity(0);
+              n.setMinStock(0);
+              return stockRepo.save(n);
+            });
     int before = s.getQuantity();
-    int delta =
-        switch (r.type()) {
-          case "in" -> Math.abs(r.quantity());
-          case "out" -> -Math.abs(r.quantity());
-          case "adjustment" -> {
-            if (r.quantity() < 0) throw new BusinessRuleException("Quantity cannot be negative");
-            yield r.quantity() - before;
-          }
-          default -> throw new BusinessRuleException("Invalid type");
-        };
-    if (before + delta < 0) throw new BusinessRuleException("Insufficient stock");
+    int delta = switch (r.type()) {
+      case "in" -> Math.abs(r.quantity());
+      case "out" -> -Math.abs(r.quantity());
+      case "adjustment" -> {
+        if (r.quantity() < 0)
+          throw new BusinessRuleException("Quantity cannot be negative");
+        yield r.quantity() - before;
+      }
+      default -> throw new BusinessRuleException("Invalid type");
+    };
+    if (before + delta < 0)
+      throw new BusinessRuleException("Insufficient stock");
     s.adjustQuantity(delta);
     stockRepo.save(s);
-    StockMovement m =
-        movementRepo.save(
-            StockMovement.record(
-                r.productId(),
-                r.storeId(),
-                p.userId(),
-                r.type(),
-                delta,
-                before,
-                s.getQuantity(),
-                r.reference(),
-                r.note()));
+    StockMovement m = movementRepo.save(
+        StockMovement.record(
+            r.productId(),
+            r.storeId(),
+            p.userId(),
+            r.type(),
+            delta,
+            before,
+            s.getQuantity(),
+            r.reference(),
+            r.note()));
     return mapMov(m);
   }
 
@@ -157,18 +156,17 @@ public class StockService {
   @Transactional
   public void updateStockForSale(
       UUID productId, UUID storeId, UUID userId, int qty, String saleId) {
-    ProductStoreStock s =
-        stockRepo
-            .findByProductIdAndStoreId(productId, storeId)
-            .orElseGet(
-                () -> {
-                  ProductStoreStock n = new ProductStoreStock();
-                  n.setProductId(productId);
-                  n.setStoreId(storeId);
-                  n.setQuantity(0);
-                  n.setMinStock(0);
-                  return stockRepo.save(n);
-                });
+    ProductStoreStock s = stockRepo
+        .findByProductIdAndStoreId(productId, storeId)
+        .orElseGet(
+            () -> {
+              ProductStoreStock n = new ProductStoreStock();
+              n.setProductId(productId);
+              n.setStoreId(storeId);
+              n.setQuantity(0);
+              n.setMinStock(0);
+              return stockRepo.save(n);
+            });
     int before = s.getQuantity();
     if (before - qty < 0) {
       throw new BusinessRuleException(
@@ -184,18 +182,17 @@ public class StockService {
   @Transactional
   public void updateStockForPurchase(
       UUID productId, UUID storeId, UUID userId, int qty, String ref) {
-    ProductStoreStock s =
-        stockRepo
-            .findByProductIdAndStoreId(productId, storeId)
-            .orElseGet(
-                () -> {
-                  ProductStoreStock n = new ProductStoreStock();
-                  n.setProductId(productId);
-                  n.setStoreId(storeId);
-                  n.setQuantity(0);
-                  n.setMinStock(0);
-                  return stockRepo.save(n);
-                });
+    ProductStoreStock s = stockRepo
+        .findByProductIdAndStoreId(productId, storeId)
+        .orElseGet(
+            () -> {
+              ProductStoreStock n = new ProductStoreStock();
+              n.setProductId(productId);
+              n.setStoreId(storeId);
+              n.setQuantity(0);
+              n.setMinStock(0);
+              return stockRepo.save(n);
+            });
     int before = s.getQuantity();
     s.adjustQuantity(qty);
     stockRepo.save(s);
@@ -226,7 +223,8 @@ public class StockService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess())
+      throw new AccessDeniedException("Business context required");
   }
 
   private StockLevelResponse mapLevel(ProductStoreStock s) {
@@ -243,7 +241,8 @@ public class StockService {
         s.isLowStock(),
         s.getUpdatedAt(),
         pr != null ? pr.getSalePrice() : null,
-        pr != null ? pr.getCategoryId() : null);
+        pr != null ? pr.getCategoryId() : null,
+        pr != null ? pr.getImageUrl() : null);
   }
 
   private StockMovementResponse mapMov(StockMovement m) {

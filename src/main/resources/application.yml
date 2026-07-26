@@ -148,6 +148,7 @@ app:
   url: ${APP_URL:http://localhost:5173}
   files:
     business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
+    product-images-dir: ${PRODUCT_IMAGES_DIR:./data/uploads/product-images}
   subscription:
     expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
   cors:
