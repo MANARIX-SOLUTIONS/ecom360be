@@ -19,10 +19,13 @@ RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# Writable roots: logs + persisted uploads (override with -e BUSINESS_LOGOS_DIR or a volume)
+# Writable roots: logs + persisted uploads (override with -e BUSINESS_LOGOS_DIR /
+# PRODUCT_IMAGES_DIR or a volume)
 ENV BUSINESS_LOGOS_DIR=/app/data/uploads/business-logos
+ENV PRODUCT_IMAGES_DIR=/app/data/uploads/product-images
 
 RUN mkdir -p /app/logs /app/data/uploads/business-logos \
+  /app/data/uploads/product-images \
   && chown -R appuser:appgroup /app
 
 USER appuser
