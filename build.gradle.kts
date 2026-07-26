@@ -16,7 +16,7 @@ buildscript {
 }
 
 group = "com.ecom360"
-version = "1.5.0+20260516"
+version = "1.6.0+20262607"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
