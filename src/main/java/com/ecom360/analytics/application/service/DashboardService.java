@@ -100,21 +100,19 @@ public class DashboardService {
     boolean limitedAnalytics = planOpt.isPresent() && !Boolean.TRUE.equals(planOpt.get().getFeatureReports());
     boolean showLowStock = planOpt.isEmpty() || Boolean.TRUE.equals(planOpt.get().getFeatureStockAlerts());
 
-    Instant todayStart = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
-    Instant todayEnd = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+    ZoneId zone = ZoneId.systemDefault();
+    Instant todayStart = today.atStartOfDay(zone).toInstant();
+    Instant todayEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
 
-    long todaySalesCount = storeId != null
-        ? saleRepo.countByBusinessIdAndStoreIdAndCreatedAtBetween(
-            bId, storeId, todayStart, todayEnd)
-        : saleRepo.countByBusinessIdAndCreatedAtBetween(bId, todayStart, todayEnd);
+    PeriodTotals todayTotals = loadPeriodTotals(bId, storeId, todayStart, todayEnd);
+    long todaySalesCount = todayTotals.salesCount();
+    long todayRevenue = todayTotals.revenue();
 
     PeriodSnapshot current = loadPeriodSnapshot(bId, storeId, ep.effStart(), ep.effEnd());
     long periodSalesCount = current.salesCount();
     long periodRevenue = current.revenue();
     long periodExpenses = current.expenses();
     long periodProfit = current.profit();
-
-    long todayRevenue = sumCompletedRevenue(bId, storeId, todayStart, todayEnd);
 
     long todayExpenses = storeId != null
         ? expenseRepo.sumAmountByBusinessIdAndStoreIdAndDateBetween(bId, storeId, today, today)
@@ -197,6 +195,15 @@ public class DashboardService {
     String periodStartIso = ep.effStart().toString();
     String periodEndIso = ep.effEnd().toString();
 
+    List<DashboardResponse.DailyAmount> periodDailySales = mapDailyAmounts(
+        saleRepo.sumRevenueGroupedByDayBetween(bId, storeId, ep.pStart(), ep.pEnd()));
+    List<DashboardResponse.DailyAmount> periodDailyExpenses = mapDailyAmounts(
+        expenseRepo.sumAmountGroupedByDateBetween(
+            bId, storeId, ep.effStart(), ep.effEnd()));
+    List<DashboardResponse.PaymentBreakdown> periodPaymentBreakdown = mapPaymentBreakdown(
+        saleRepo.sumRevenueGroupedByPaymentMethodBetween(
+            bId, storeId, ep.pStart(), ep.pEnd()));
+
     return new DashboardResponse(
         todaySalesCount,
         todayRevenue,
@@ -225,7 +232,10 @@ public class DashboardService {
         previous.expenses(),
         previous.profit(),
         debtorClientsCount,
-        totalReceivable);
+        totalReceivable,
+        periodDailySales,
+        periodDailyExpenses,
+        periodPaymentBreakdown);
   }
 
   public DashboardSliceResponse<DashboardResponse.TopProduct> sliceTopProducts(
@@ -311,7 +321,10 @@ public class DashboardService {
         totalRevenue,
         totalExpenses);
 
-    List<DashboardResponse.LowStockItem> lowStock = buildLowStockItems(null, showLowStockGlobal, stores);
+    List<DashboardResponse.LowStockItem> allLowStock = buildLowStockItems(null, showLowStockGlobal, stores);
+    List<DashboardResponse.LowStockItem> lowStock = allLowStock.size() <= DASHBOARD_LIST_PREVIEW
+        ? allLowStock
+        : allLowStock.subList(0, DASHBOARD_LIST_PREVIEW);
 
     List<DashboardResponse.TopProduct> topProducts = saleLineRepo.aggregateProductSalesBetween(bId, null, pStart, pEnd)
         .stream()
@@ -443,12 +456,53 @@ public class DashboardService {
   }
 
   private PeriodTotals loadPeriodTotals(UUID bId, UUID storeId, Instant start, Instant end) {
-    Object[] row = saleRepo.sumRevenueAndCountBetween(bId, storeId, start, end);
+    List<Object[]> rows = saleRepo.sumRevenueAndCountBetween(bId, storeId, start, end);
+    Object[] row = (rows == null || rows.isEmpty()) ? null : rows.get(0);
     return new PeriodTotals(revenueOf(row), countOf(row));
   }
 
-  private long sumCompletedRevenue(UUID bId, UUID storeId, Instant start, Instant end) {
-    return revenueOf(saleRepo.sumRevenueAndCountBetween(bId, storeId, start, end));
+  private static List<DashboardResponse.DailyAmount> mapDailyAmounts(List<Object[]> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return List.of();
+    }
+    List<DashboardResponse.DailyAmount> out = new ArrayList<>(rows.size());
+    for (Object[] row : rows) {
+      if (row == null || row.length < 2 || row[0] == null) {
+        continue;
+      }
+      out.add(new DashboardResponse.DailyAmount(toIsoDate(row[0]), asLong(row[1])));
+    }
+    return out;
+  }
+
+  private static List<DashboardResponse.PaymentBreakdown> mapPaymentBreakdown(
+      List<Object[]> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return List.of();
+    }
+    List<DashboardResponse.PaymentBreakdown> out = new ArrayList<>(rows.size());
+    for (Object[] row : rows) {
+      if (row == null || row.length < 2) {
+        continue;
+      }
+      String method = row[0] != null ? row[0].toString() : "cash";
+      out.add(new DashboardResponse.PaymentBreakdown(method, asLong(row[1])));
+    }
+    out.sort(Comparator.comparingLong(DashboardResponse.PaymentBreakdown::amount).reversed());
+    return out;
+  }
+
+  private static String toIsoDate(Object value) {
+    if (value instanceof LocalDate ld) {
+      return ld.toString();
+    }
+    if (value instanceof java.sql.Date sqlDate) {
+      return sqlDate.toLocalDate().toString();
+    }
+    if (value instanceof java.util.Date utilDate) {
+      return utilDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().toString();
+    }
+    return value.toString();
   }
 
   private Map<UUID, Integer> costByProduct(List<Object[]> productRows) {
@@ -472,11 +526,27 @@ public class DashboardService {
   }
 
   private static long revenueOf(Object[] row) {
-    return row != null && row.length > 0 ? asLong(row[0]) : 0L;
+    Object[] cols = unwrapAggregateRow(row);
+    return cols != null && cols.length > 0 ? asLong(cols[0]) : 0L;
   }
 
   private static long countOf(Object[] row) {
-    return row != null && row.length > 1 ? asLong(row[1]) : 0L;
+    Object[] cols = unwrapAggregateRow(row);
+    return cols != null && cols.length > 1 ? asLong(cols[1]) : 0L;
+  }
+
+  /**
+   * Spring Data / Hibernate may return a multi-column aggregate either as
+   * {@code [revenue, count]} or nested as {@code [[revenue, count]]}.
+   */
+  private static Object[] unwrapAggregateRow(Object[] row) {
+    if (row == null || row.length == 0) {
+      return null;
+    }
+    if (row.length == 1 && row[0] instanceof Object[] nested) {
+      return nested;
+    }
+    return row;
   }
 
   private static long asLong(Object value) {
