@@ -456,9 +456,9 @@ public class DashboardService {
   }
 
   private PeriodTotals loadPeriodTotals(UUID bId, UUID storeId, Instant start, Instant end) {
-    List<Object[]> rows = saleRepo.sumRevenueAndCountBetween(bId, storeId, start, end);
-    Object[] row = (rows == null || rows.isEmpty()) ? null : rows.get(0);
-    return new PeriodTotals(revenueOf(row), countOf(row));
+    long revenue = saleRepo.sumCompletedTotalBetween(bId, storeId, start, end);
+    long salesCount = saleRepo.countCompletedBetween(bId, storeId, start, end);
+    return new PeriodTotals(revenue, salesCount);
   }
 
   private static List<DashboardResponse.DailyAmount> mapDailyAmounts(List<Object[]> rows) {
@@ -523,30 +523,6 @@ public class DashboardService {
   private static DashboardResponse.TopProduct toTopProduct(Object[] row) {
     return new DashboardResponse.TopProduct(
         (UUID) row[0], (String) row[1], asLong(row[2]), asLong(row[3]));
-  }
-
-  private static long revenueOf(Object[] row) {
-    Object[] cols = unwrapAggregateRow(row);
-    return cols != null && cols.length > 0 ? asLong(cols[0]) : 0L;
-  }
-
-  private static long countOf(Object[] row) {
-    Object[] cols = unwrapAggregateRow(row);
-    return cols != null && cols.length > 1 ? asLong(cols[1]) : 0L;
-  }
-
-  /**
-   * Spring Data / Hibernate may return a multi-column aggregate either as
-   * {@code [revenue, count]} or nested as {@code [[revenue, count]]}.
-   */
-  private static Object[] unwrapAggregateRow(Object[] row) {
-    if (row == null || row.length == 0) {
-      return null;
-    }
-    if (row.length == 1 && row[0] instanceof Object[] nested) {
-      return nested;
-    }
-    return row;
   }
 
   private static long asLong(Object value) {
