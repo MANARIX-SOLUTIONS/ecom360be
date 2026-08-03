@@ -20,7 +20,7 @@ Canonical codes (uppercase) after `V55__business_role_codes_fr.sql`:
 | `GESTIONNAIRE` | Gestionnaire | All except `SUBSCRIPTION_UPDATE` and `BUSINESS_USERS_DELETE` (V54); later migrations also grant commerce + reports |
 | `CAISSIER` | Caissier | Narrow set (below) |
 
-README on `main` still lists lowercase `proprietaire` / `gestionnaire` / `caissier` — those are **obsolete**. JWT / DB use the uppercase French codes.
+Legacy lowercase labels (`proprietaire`, `gestionnaire`, `caissier`) appear only in the V54 membership backfill. Runtime role codes and JWT context use the uppercase French codes above.
 
 `V54` CAISSIER seed:
 

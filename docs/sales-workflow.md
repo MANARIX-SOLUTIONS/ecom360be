@@ -46,7 +46,7 @@ Key rules in `SaleService.createSale`:
 
 | Rule | Create | Update |
 |------|--------|--------|
-| Credit payment | Hard-rejected | Allowed if plan `featureClientCredits` |
+| Credit payment | Hard-rejected | Rejected only when a plan exists and `featureClientCredits` is not true |
 | Store change | N/A | Forbidden |
 | Receipt number | Generated | Unchanged |
 | Monthly sale quota | Enforced | Not re-checked (only mobile-money plan flag) |

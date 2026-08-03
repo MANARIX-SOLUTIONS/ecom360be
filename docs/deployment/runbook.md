@@ -44,16 +44,16 @@ spring.flyway.clean-disabled: true
 
 **Prod does not auto-migrate.** Run Flyway separately (CI job, ops script, or a one-off container with Flyway enabled) **before** rolling a release that needs new migrations. Dev/default profiles still migrate from `classpath:db/migration`.
 
-## Env vars for uploads (often missing from `.env.example`)
+## Env vars for uploads
 
-Bound in `application.yml` via `AppFilesProperties`:
+Bound in `application.yml` via `AppFilesProperties` (also listed in `.env.example`):
 
 | Env var | Property | Default |
 |---------|----------|---------|
 | `BUSINESS_LOGOS_DIR` | `app.files.business-logos-dir` | `./data/uploads/business-logos` |
 | `PRODUCT_IMAGES_DIR` | `app.files.product-images-dir` | `./data/uploads/product-images` |
 
-These were historically absent from `.env.example` even though the Dockerfile sets them. Persist them with a volume, e.g.:
+Dockerfile defaults these to `/app/data/uploads/...`. Persist them with a volume, e.g.:
 
 ```yaml
 volumes:

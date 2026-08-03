@@ -41,7 +41,9 @@ The controller binds `@RequestBody String rawBody` so verification uses the exac
 `CanonicalOrderPayload` (summary of enforced fields):
 
 - `sourceType`, `externalOrderId`, `currency`, `paymentStatus` required
-- At least one line; each line needs `sku` **or** `productId`
+- At least one line; each line needs:
+  - `sku` **or** `productId` (service-enforced)
+  - `label` (required), `quantity >= 1`, `unitPriceMinorUnits >= 0`
 - Eligible `paymentStatus` values (case-insensitive) for sale creation:
   - `paid`, `completed`, `captured`, `settled`, `paid_in_full`, `processing`
 - Other statuses → business rule (no sale)
