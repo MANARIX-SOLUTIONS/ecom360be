@@ -30,7 +30,7 @@ CREATE DATABASE ecom360;
 
 ### 2. Configuration
 
-Copy and configure environment variables or create `application-local.yml`:
+Copy `.env.example` to `.env`, or create `application-local.yml`:
 
 ```yaml
 spring:
@@ -49,10 +49,10 @@ jwt:
 ./gradlew bootRun
 ```
 
-Or with custom DB config:
+Or with Docker Compose (Postgres + API + Maildev):
 
 ```bash
-DB_HOST=localhost DB_PORT=5432 DB_NAME=ecom360 DB_USERNAME=postgres DB_PASSWORD=postgres ./gradlew bootRun
+docker compose up -d
 ```
 
 ### 4. Format & Quality
@@ -68,39 +68,72 @@ DB_HOST=localhost DB_PORT=5432 DB_NAME=ecom360 DB_USERNAME=postgres DB_PASSWORD=
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/api-docs
 
-## API Endpoints
+## Engineering docs
 
-### Public
-- `POST /api/v1/auth/register` - Register user + business
-- `POST /api/v1/auth/login` - Login
-- `POST /api/v1/auth/refresh` - Refresh access token
+| Guide | Topic |
+|-------|--------|
+| [docs/sales-workflow.md](docs/sales-workflow.md) | POS create/update/void, stock, payment pitfalls |
+| [docs/permissions.md](docs/permissions.md) | French role codes, `RolePermissionService`, navigation |
+| [docs/integrations/commerce-webhooks.md](docs/integrations/commerce-webhooks.md) | Public HMAC webhooks, WooCommerce, idempotency |
+| [docs/deployment/runbook.md](docs/deployment/runbook.md) | Docker, Flyway prod-off, upload dirs, healthchecks |
 
-### Protected (require JWT)
-- `GET/POST/PUT/DELETE /api/v1/products` - Product management
-- `GET/POST/PUT/DELETE /api/v1/stores` - Store management
-- More endpoints for clients, suppliers, sales, etc.
+## API surface (high level)
 
-## Project Structure
+### Public (no JWT)
+
+- `POST /api/v1/auth/login`, `/refresh`, `/forgot-password`, `/reset-password`
+- `POST /api/v1/auth/demo-request`
+- `POST /api/v1/public/commerce/webhooks/incoming/{token}` (+ `/woocommerce`)
+- Public file routes under `/api/v1/public/**` (product images, business logos)
+
+### Protected (JWT + business context)
+
+- `/api/v1/sales`, `/products`, `/stores`, `/clients`, `/stock`, `/expenses`, …
+- `/api/v1/dashboard`, `/dashboard/global`, …
+- `/api/v1/commerce/connections`, `/webhooks`, `/api-keys`, …
+
+### Platform admin
+
+- `/api/v1/admin/**` — requires `ROLE_PLATFORM_ADMIN`
+
+## Project structure
+
+Code is organized by **bounded context** (not a flat `controller/` / `service/` layout):
 
 ```
 src/main/java/com/ecom360/
-├── common/           # Shared utilities, constants
-├── config/           # Spring configuration
-├── controller/       # REST controllers
-├── dto/              # Request/Response DTOs
-├── entity/           # JPA entities
-├── exception/        # Exception handling
-├── repository/       # JPA repositories
-├── security/         # JWT, auth config
-└── service/          # Business logic
+├── admin/          # Platform-admin APIs
+├── analytics/      # Dashboard / global view
+├── audit/          # Audit trail
+├── catalog/        # Products, categories, product images
+├── client/         # Customers / credit balances
+├── delivery/       # Couriers & livraisons
+├── expense/        # Business expenses
+├── identity/       # Auth, roles, permissions, JWT security
+├── integration/    # API keys, outbound webhooks, commerce ingestion
+├── inventory/      # Stock levels & movements
+├── notification/   # In-app notifications
+├── platform/       # Platform-level domain
+├── sales/          # POS sales & sale lines
+├── shared/         # Cross-cutting config, mail, cache, exceptions
+├── store/          # Stores
+├── supplier/       # Suppliers & purchase orders
+└── tenant/         # Business, plans, subscriptions, logos
 ```
 
-## Multi-Tenancy
+Each context typically follows `application` / `domain` / `infrastructure` layers.
 
-All data is scoped by `business_id`. Users belong to one or more businesses via `business_user` with roles:
-- `proprietaire` - Owner
-- `gestionnaire` - Manager
-- `caissier` - Cashier
+## Multi-tenancy & roles
+
+All tenant data is scoped by `business_id`. Membership is via `business_user` with a `business_role`.
+
+Canonical **French role codes** (uppercase):
+
+- `PROPRIETAIRE` — owner (all permissions)
+- `GESTIONNAIRE` — manager (broad; no subscription update / owner delete)
+- `CAISSIER` — cashier (sales + limited reads)
+
+See [docs/permissions.md](docs/permissions.md).
 
 ## License
 
