@@ -1,11 +1,13 @@
 package com.ecom360.client.application.service;
 
 import com.ecom360.client.application.dto.*;
+import com.ecom360.client.domain.ClientCreditPolicy;
 import com.ecom360.client.domain.model.*;
 import com.ecom360.client.domain.repository.*;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.sales.application.service.SalePaymentAllocationService;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.UUID;
@@ -19,16 +21,19 @@ public class ClientService {
 
   private final ClientRepository clientRepo;
   private final ClientPaymentRepository paymentRepo;
+  private final SalePaymentAllocationService allocationService;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
 
   public ClientService(
       ClientRepository clientRepo,
       ClientPaymentRepository paymentRepo,
+      SalePaymentAllocationService allocationService,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService) {
     this.clientRepo = clientRepo;
     this.paymentRepo = paymentRepo;
+    this.allocationService = allocationService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
   }
@@ -104,13 +109,9 @@ public class ClientService {
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
-            plan -> {
-              if (!Boolean.TRUE.equals(plan.getFeatureClientCredits())) {
-                throw new BusinessRuleException(
-                    "Crédits clients non inclus dans votre plan. Passez à un plan supérieur.");
-              }
-            });
+            plan -> ClientCreditPolicy.requireFeatureEnabled(plan.getFeatureClientCredits()));
     Client c = find(clientId, p);
+    ClientCreditPolicy.requireRepayment(c, r.amount());
     c.deductCredit(r.amount());
     clientRepo.save(c);
     ClientPayment pay = new ClientPayment();
@@ -121,6 +122,15 @@ public class ClientService {
     pay.setPaymentMethod(r.paymentMethod());
     pay.setNote(r.note());
     pay = paymentRepo.save(pay);
+    allocationService.allocateClientRepayment(
+        p.businessId(),
+        clientId,
+        r.storeId(),
+        p.userId(),
+        r.amount(),
+        r.paymentMethod(),
+        pay.getId(),
+        r.note());
     return new ClientPaymentResponse(
         pay.getId(),
         pay.getClientId(),

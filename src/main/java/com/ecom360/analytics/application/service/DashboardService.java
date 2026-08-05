@@ -13,6 +13,7 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.domain.model.ProductStoreStock;
 import com.ecom360.inventory.domain.repository.ProductStoreStockRepository;
 import com.ecom360.sales.domain.repository.SaleLineRepository;
+import com.ecom360.sales.domain.repository.SalePaymentRepository;
 import com.ecom360.sales.domain.repository.SaleRepository;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.store.domain.model.Store;
@@ -46,6 +47,7 @@ public class DashboardService {
 
   private final SaleRepository saleRepo;
   private final SaleLineRepository saleLineRepo;
+  private final SalePaymentRepository salePaymentRepo;
   private final ProductRepository productRepo;
   private final StoreRepository storeRepo;
   private final ClientRepository clientRepo;
@@ -59,6 +61,7 @@ public class DashboardService {
   public DashboardService(
       SaleRepository saleRepo,
       SaleLineRepository saleLineRepo,
+      SalePaymentRepository salePaymentRepo,
       ProductRepository productRepo,
       StoreRepository storeRepo,
       ClientRepository clientRepo,
@@ -70,6 +73,7 @@ public class DashboardService {
       BusinessRepository businessRepo) {
     this.saleRepo = saleRepo;
     this.saleLineRepo = saleLineRepo;
+    this.salePaymentRepo = salePaymentRepo;
     this.productRepo = productRepo;
     this.storeRepo = storeRepo;
     this.clientRepo = clientRepo;
@@ -125,6 +129,9 @@ public class DashboardService {
 
     long debtorClientsCount = clientRepo.countDebtorsWithPositiveBalance(bId);
     long totalReceivable = clientRepo.sumPositiveCreditBalance(bId);
+    long periodCashCollected = salePaymentRepo.sumCollectedBetween(
+        bId, storeId, ep.pStart(), ep.pEnd());
+    long outstandingSalesAmount = saleRepo.sumOutstanding(bId, storeId);
 
     long totalProducts = productRepo.countByBusinessId(bId);
     long totalClients = clientRepo.countByBusinessIdAndIsActive(bId, true);
@@ -233,6 +240,8 @@ public class DashboardService {
         previous.profit(),
         debtorClientsCount,
         totalReceivable,
+        periodCashCollected,
+        outstandingSalesAmount,
         periodDailySales,
         periodDailyExpenses,
         periodPaymentBreakdown);

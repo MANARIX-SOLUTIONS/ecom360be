@@ -18,16 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class SupplierService {
   private final SupplierRepository supplierRepo;
   private final SupplierPaymentRepository paymentRepo;
+  private final PurchaseOrderPaymentAllocationService allocationService;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
 
   public SupplierService(
       SupplierRepository supplierRepo,
       SupplierPaymentRepository paymentRepo,
+      PurchaseOrderPaymentAllocationService allocationService,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService) {
     this.supplierRepo = supplierRepo;
     this.paymentRepo = paymentRepo;
+    this.allocationService = allocationService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
   }
@@ -110,6 +113,14 @@ public class SupplierService {
     pay.setPaymentMethod(r.paymentMethod());
     pay.setNote(r.note());
     pay = paymentRepo.save(pay);
+    allocationService.allocateSupplierRepayment(
+        p.businessId(),
+        supplierId,
+        p.userId(),
+        r.amount(),
+        r.paymentMethod(),
+        pay.getId(),
+        r.note());
     return new SupplierPaymentResponse(
         pay.getId(),
         pay.getSupplierId(),

@@ -16,40 +16,40 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface SubscriptionPaymentIntentRepository
-    extends JpaRepository<SubscriptionPaymentIntent, UUID> {
+        extends JpaRepository<SubscriptionPaymentIntent, UUID> {
 
-  Optional<SubscriptionPaymentIntent> findByExternalToken(String externalToken);
+    Optional<SubscriptionPaymentIntent> findByExternalToken(String externalToken);
 
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("SELECT i FROM SubscriptionPaymentIntent i WHERE i.id = :id")
-  Optional<SubscriptionPaymentIntent> findByIdForUpdate(@Param("id") UUID id);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM SubscriptionPaymentIntent i WHERE i.id = :id")
+    Optional<SubscriptionPaymentIntent> findByIdForUpdate(@Param("id") UUID id);
 
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("SELECT i FROM SubscriptionPaymentIntent i WHERE i.externalToken = :token")
-  Optional<SubscriptionPaymentIntent> findByExternalTokenForUpdate(@Param("token") String token);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM SubscriptionPaymentIntent i WHERE i.externalToken = :token")
+    Optional<SubscriptionPaymentIntent> findByExternalTokenForUpdate(@Param("token") String token);
 
-  Page<SubscriptionPaymentIntent> findByBusinessIdOrderByCreatedAtDesc(
-      UUID businessId, Pageable pageable);
+    Page<SubscriptionPaymentIntent> findByBusinessIdOrderByCreatedAtDesc(
+            UUID businessId, Pageable pageable);
 
-  @Query("""
-      SELECT i FROM SubscriptionPaymentIntent i
-      WHERE i.status = :status AND i.createdAt < :before
-      """)
-  List<SubscriptionPaymentIntent> findByStatusAndCreatedAtBefore(
-      @Param("status") String status, @Param("before") Instant before);
+    @Query("""
+            SELECT i FROM SubscriptionPaymentIntent i
+            WHERE i.status = :status AND i.createdAt < :before
+            """)
+    List<SubscriptionPaymentIntent> findByStatusAndCreatedAtBefore(
+            @Param("status") String status, @Param("before") Instant before);
 
-  @Query("""
-      SELECT i FROM SubscriptionPaymentIntent i
-      WHERE (:businessId IS NULL OR i.businessId = :businessId)
-        AND (:status IS NULL OR i.status = :status)
-        AND (:from IS NULL OR i.createdAt >= :from)
-        AND (:to IS NULL OR i.createdAt <= :to)
-      ORDER BY i.createdAt DESC
-      """)
-  Page<SubscriptionPaymentIntent> search(
-      @Param("businessId") UUID businessId,
-      @Param("status") String status,
-      @Param("from") Instant from,
-      @Param("to") Instant to,
-      Pageable pageable);
+    @Query("""
+            SELECT i FROM SubscriptionPaymentIntent i
+            WHERE (:businessId IS NULL OR i.businessId = :businessId)
+              AND (:status IS NULL OR i.status = :status)
+              AND (CAST(:from AS timestamp) IS NULL OR i.createdAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR i.createdAt <= :to)
+            ORDER BY i.createdAt DESC
+            """)
+    Page<SubscriptionPaymentIntent> search(
+            @Param("businessId") UUID businessId,
+            @Param("status") String status,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            Pageable pageable);
 }

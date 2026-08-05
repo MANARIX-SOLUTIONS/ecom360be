@@ -30,6 +30,15 @@ public class PurchaseOrder extends BaseEntity {
   @Column(name = "total_amount", nullable = false)
   private Integer totalAmount;
 
+  @Column(name = "amount_paid", nullable = false)
+  private Integer amountPaid = 0;
+
+  @Column(name = "payment_status", nullable = false)
+  private String paymentStatus = PurchaseOrderPaymentStatus.UNPAID;
+
+  @Column(name = "due_date")
+  private LocalDate dueDate;
+
   @Column(name = "expected_date")
   private LocalDate expectedDate;
 
@@ -53,6 +62,39 @@ public class PurchaseOrder extends BaseEntity {
     }
     this.status = next;
     if ("received".equals(next)) this.receivedDate = LocalDate.now();
+  }
+
+  public boolean isReceived() {
+    return "received".equals(status);
+  }
+
+  /** Solde restant à régler au fournisseur sur ce bon. */
+  public int getRemainingAmount() {
+    int due = totalAmount == null ? 0 : totalAmount;
+    int paid = amountPaid == null ? 0 : amountPaid;
+    return Math.max(0, due - paid);
+  }
+
+  public boolean hasOutstandingBalance() {
+    return isReceived() && getRemainingAmount() > 0;
+  }
+
+  /** Impute un versement et recalcule le statut de paiement. */
+  public void applyPayment(int amount) {
+    this.amountPaid = (amountPaid == null ? 0 : amountPaid) + amount;
+    recomputePaymentStatus();
+  }
+
+  public void recomputePaymentStatus() {
+    int due = totalAmount == null ? 0 : totalAmount;
+    int paid = amountPaid == null ? 0 : amountPaid;
+    if (paid >= due) {
+      this.paymentStatus = PurchaseOrderPaymentStatus.PAID;
+    } else if (paid > 0) {
+      this.paymentStatus = PurchaseOrderPaymentStatus.PARTIAL;
+    } else {
+      this.paymentStatus = PurchaseOrderPaymentStatus.UNPAID;
+    }
   }
 
   public UUID getBusinessId() {
@@ -109,6 +151,30 @@ public class PurchaseOrder extends BaseEntity {
 
   public void setTotalAmount(Integer v) {
     this.totalAmount = v;
+  }
+
+  public Integer getAmountPaid() {
+    return amountPaid;
+  }
+
+  public void setAmountPaid(Integer v) {
+    this.amountPaid = v;
+  }
+
+  public String getPaymentStatus() {
+    return paymentStatus;
+  }
+
+  public void setPaymentStatus(String v) {
+    this.paymentStatus = v;
+  }
+
+  public LocalDate getDueDate() {
+    return dueDate;
+  }
+
+  public void setDueDate(LocalDate v) {
+    this.dueDate = v;
   }
 
   public LocalDate getExpectedDate() {

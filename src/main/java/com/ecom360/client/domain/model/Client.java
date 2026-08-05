@@ -1,5 +1,6 @@
 package com.ecom360.client.domain.model;
 
+import com.ecom360.client.domain.ClientCreditPolicy;
 import com.ecom360.shared.domain.model.AggregateRoot;
 import jakarta.persistence.*;
 import java.util.UUID;
@@ -38,6 +39,10 @@ public class Client extends AggregateRoot {
 
   public void deductCredit(int amount) {
     this.creditBalance -= amount;
+  }
+
+  public boolean isWalkIn() {
+    return ClientCreditPolicy.isWalkInName(name);
   }
 
   // Getters and setters

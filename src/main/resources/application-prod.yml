@@ -9,6 +9,7 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/neondb}
     username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
     hikari:
       minimum-idle: ${HIKARI_MIN_IDLE:10}
       maximum-pool-size: ${HIKARI_MAX_POOL:40}
@@ -23,7 +24,10 @@ spring:
         reWriteBatchedInserts: true
 
   jpa:
-    show-sql: false
+    show-sql: true
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
     properties:
       hibernate:
         format_sql: false
@@ -38,6 +42,17 @@ spring:
   # ── Mail: empty by default on VPS (no maildev); set MAIL_HOST for real SMTP
   mail:
     host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    from: ${MAIL_FROM:noreply@ecom360.local}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_USERNAME:false}
+          starttls:
+            enable: ${MAIL_USERNAME:false}
 
   flyway:
     enabled: false # no auto-migrate in prod; run migrations separately
@@ -81,8 +96,27 @@ jwt:
 
 # ── CORS — restrict to known origins ──
 app:
+  url: ${APP_URL:http://localhost:5173}
+  files:
+    business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
+    product-images-dir: ${PRODUCT_IMAGES_DIR:./data/uploads/product-images}
+  subscription:
+    expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
+  payment:
+    provider: ${PAYMENT_PROVIDER:paydunya}
+    paydunya:
+      enabled: ${PAYDUNYA_ENABLED:false}
+      base-url: ${PAYDUNYA_BASE_URL:https://app.paydunya.com}
+      master-key: ${PAYDUNYA_MASTER_KEY:}
+      private-key: ${PAYDUNYA_PRIVATE_KEY:}
+      token: ${PAYDUNYA_TOKEN:}
+      store-name: ${PAYDUNYA_STORE_NAME:Ecom 360 PME}
+      api-public-url: ${APP_API_URL:http://localhost:8080}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS} # REQUIRED
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
+    max-age: 3600
 
 # ── Swagger OFF in prod ──
 springdoc:

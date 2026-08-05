@@ -6,13 +6,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Règles d'accès aux écrans de navigation : chaque clé correspond à une entrée de menu / route ;
- * l'utilisateur doit posséder au moins une des permissions listées. Doit rester aligné avec le
+ * Règles d'accès aux écrans de navigation : chaque clé correspond à une entrée
+ * de menu / route ;
+ * l'utilisateur doit posséder au moins une des permissions listées. Doit rester
+ * aligné avec le
  * client (fallback) jusqu'à chargement de {@code /permissions/me}.
  */
 public final class NavigationPermissionRules {
 
-  private NavigationPermissionRules() {}
+  private NavigationPermissionRules() {
+  }
 
   public static Map<String, List<String>> asMap() {
     Map<String, List<String>> m = new LinkedHashMap<>();
@@ -21,7 +24,11 @@ public final class NavigationPermissionRules {
     m.put("products", List.of("PRODUCTS_READ"));
     m.put("clients", List.of("CLIENTS_READ"));
     m.put("suppliers", List.of("SUPPLIERS_READ"));
-    /** Au moins une permission livreurs (souvent READ seul n’est pas coché si l’admin donne Créer, etc.). */
+    m.put("purchaseOrders", List.of("PURCHASE_ORDERS_READ"));
+    /**
+     * Au moins une permission livreurs (souvent READ seul n’est pas coché si
+     * l’admin donne Créer, etc.).
+     */
     m.put(
         "livreurs",
         List.of(
@@ -35,7 +42,13 @@ public final class NavigationPermissionRules {
     m.put("reports", List.of("REPORTS_READ"));
     m.put(
         "settings",
-        List.of("STORES_READ", "SUBSCRIPTION_READ", "BUSINESS_USERS_READ"));
+        List.of(
+            "STORES_READ",
+            "SUBSCRIPTION_READ",
+            "BUSINESS_USERS_READ",
+            "COMMERCE_CONNECTIONS_READ",
+            "API_KEYS_READ",
+            "WEBHOOKS_READ"));
     m.put("settings:stores", List.of("STORES_READ"));
     m.put("settings:profile", List.of("STORES_READ"));
     m.put("settings:subscription", List.of("SUBSCRIPTION_READ"));
@@ -43,6 +56,23 @@ public final class NavigationPermissionRules {
     m.put("settings:roles", List.of("BUSINESS_USERS_READ"));
     m.put("settings:security", List.of("STORES_READ"));
     m.put("settings:notifications", List.of("STORES_READ"));
+    m.put(
+        "settings:commerce",
+        List.of(
+            "COMMERCE_CONNECTIONS_READ",
+            "COMMERCE_CONNECTIONS_CREATE",
+            "COMMERCE_CONNECTIONS_UPDATE",
+            "COMMERCE_CONNECTIONS_DELETE"));
+    m.put(
+        "settings:api",
+        List.of(
+            "API_KEYS_READ",
+            "API_KEYS_CREATE",
+            "API_KEYS_DELETE",
+            "WEBHOOKS_READ",
+            "WEBHOOKS_CREATE",
+            "WEBHOOKS_UPDATE",
+            "WEBHOOKS_DELETE"));
     m.put("backoffice", List.of());
     return Collections.unmodifiableMap(m);
   }
