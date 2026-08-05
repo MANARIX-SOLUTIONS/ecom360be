@@ -151,6 +151,16 @@ app:
     product-images-dir: ${PRODUCT_IMAGES_DIR:./data/uploads/product-images}
   subscription:
     expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
+  payment:
+    provider: ${PAYMENT_PROVIDER:paydunya}
+    paydunya:
+      enabled: ${PAYDUNYA_ENABLED:false}
+      base-url: ${PAYDUNYA_BASE_URL:https://app.paydunya.com}
+      master-key: ${PAYDUNYA_MASTER_KEY:}
+      private-key: ${PAYDUNYA_PRIVATE_KEY:}
+      token: ${PAYDUNYA_TOKEN:}
+      store-name: ${PAYDUNYA_STORE_NAME:Ecom 360 PME}
+      api-public-url: ${APP_API_URL:http://localhost:8080}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
     allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
