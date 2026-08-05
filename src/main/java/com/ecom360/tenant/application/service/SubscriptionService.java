@@ -234,15 +234,25 @@ public class SubscriptionService {
   }
 
   /**
-   * Subscribe or change plan. Handles: trial→paid, expired→paid,
-   * active→upgrade/downgrade,
-   * cancelled→reactivate.
+   * Tenant self-serve plan change is disabled: payment checkout is required
+   * ({@code POST /subscription/checkout}).
    */
   @Transactional
   public SubscriptionResponse changePlan(String planSlug, String billingCycle, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_UPDATE);
+    throw new BusinessRuleException(
+        "Le changement de plan nécessite un paiement. Utilisez le checkout"
+            + " (Wave / Orange Money).");
+  }
 
+  /**
+   * Activate a paid plan after confirmed payment (or admin bypass elsewhere).
+   * Cancels any current access-granting subscription and starts a new ACTIVE
+   * period.
+   */
+  @Transactional
+  public Subscription activatePaidPlan(UUID businessId, String planSlug, String billingCycle) {
     Plan plan = planRepository
         .findBySlug(planSlug)
         .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
@@ -254,22 +264,17 @@ public class SubscriptionService {
     LocalDate start = LocalDate.now();
     LocalDate end = cycle.equals("yearly") ? start.plusYears(1) : start.plusMonths(1);
 
-    Optional<Subscription> currentOpt = subscriptionRepository
-        .findFirstByBusinessIdOrderByCreatedAtDesc(p.businessId());
-
+    Optional<Subscription> currentOpt = subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(businessId);
     if (currentOpt.isPresent()) {
       Subscription current = currentOpt.get();
       if (current.isActive()) {
-        if (current.getPlanId().equals(plan.getId()) && cycle.equals(current.getBillingCycle())) {
-          throw new BusinessRuleException("Already on this plan and billing cycle");
-        }
         current.cancelImmediate();
         subscriptionRepository.save(current);
       }
     }
 
     Subscription sub = new Subscription();
-    sub.setBusinessId(p.businessId());
+    sub.setBusinessId(businessId);
     sub.setPlanId(plan.getId());
     sub.setBillingCycle(cycle);
     sub.setStatus(SubscriptionStatus.ACTIVE);
@@ -278,7 +283,7 @@ public class SubscriptionService {
     sub = subscriptionRepository.save(sub);
 
     businessRepository
-        .findById(p.businessId())
+        .findById(businessId)
         .ifPresent(
             biz -> {
               biz.activate();
@@ -287,7 +292,53 @@ public class SubscriptionService {
               businessRepository.save(biz);
             });
 
+    return sub;
+  }
+
+  public SubscriptionResponse toSubscriptionResponsePublic(Subscription sub) {
     return toSubscriptionResponse(sub);
+  }
+
+  /** Resolve plan amount for a billing cycle (full period, no proration). */
+  public int resolvePlanAmount(Plan plan, String billingCycle) {
+    String cycle = "yearly".equalsIgnoreCase(billingCycle) ? "yearly" : "monthly";
+    Integer amount = cycle.equals("yearly") ? plan.getPriceYearly() : plan.getPriceMonthly();
+    if (amount == null || amount <= 0) {
+      throw new BusinessRuleException("Montant du plan invalide");
+    }
+    return amount;
+  }
+
+  public Plan requireActivePlanBySlug(String planSlug) {
+    Plan plan = planRepository
+        .findBySlug(planSlug)
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    if (!Boolean.TRUE.equals(plan.getIsActive())) {
+      throw new BusinessRuleException("Plan is not available");
+    }
+    return plan;
+  }
+
+  public void assertNotAlreadyOnPlan(UUID businessId, Plan plan, String billingCycle) {
+    String cycle = "yearly".equalsIgnoreCase(billingCycle) ? "yearly" : "monthly";
+    subscriptionRepository
+        .findFirstByBusinessIdAndStatusInOrderByCreatedAtDesc(
+            businessId, SubscriptionStatus.ACCESS_GRANTING)
+        .filter(this::notExpiredOrAlExpireLazyReadOnly)
+        .ifPresent(
+            current -> {
+              if (current.getPlanId().equals(plan.getId())
+                  && cycle.equals(current.getBillingCycle())
+                  && !current.isTrialing()) {
+                throw new BusinessRuleException(
+                    "Vous êtes déjà sur ce plan et ce cycle de facturation");
+              }
+            });
+  }
+
+  /** Read-only check used before checkout; does not persist expiration. */
+  private boolean notExpiredOrAlExpireLazyReadOnly(Subscription sub) {
+    return !sub.getCurrentPeriodEnd().isBefore(LocalDate.now());
   }
 
   /**

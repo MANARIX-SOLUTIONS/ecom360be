@@ -31,6 +31,15 @@ public class Invoice {
   @Column(name = "payment_method")
   private String paymentMethod;
 
+  @Column(name = "payment_intent_id")
+  private UUID paymentIntentId;
+
+  @Column(name = "provider")
+  private String provider;
+
+  @Column(name = "external_ref")
+  private String externalRef;
+
   @Column(name = "due_date", nullable = false)
   private LocalDate dueDate;
 
@@ -109,6 +118,30 @@ public class Invoice {
 
   public void setPaymentMethod(String v) {
     this.paymentMethod = v;
+  }
+
+  public UUID getPaymentIntentId() {
+    return paymentIntentId;
+  }
+
+  public void setPaymentIntentId(UUID paymentIntentId) {
+    this.paymentIntentId = paymentIntentId;
+  }
+
+  public String getProvider() {
+    return provider;
+  }
+
+  public void setProvider(String provider) {
+    this.provider = provider;
+  }
+
+  public String getExternalRef() {
+    return externalRef;
+  }
+
+  public void setExternalRef(String externalRef) {
+    this.externalRef = externalRef;
   }
 
   public LocalDate getDueDate() {
