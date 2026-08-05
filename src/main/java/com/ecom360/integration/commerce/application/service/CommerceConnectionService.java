@@ -6,6 +6,7 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.integration.commerce.application.dto.CommerceConnectionCreateRequest;
 import com.ecom360.integration.commerce.application.dto.CommerceConnectionCreateResponse;
 import com.ecom360.integration.commerce.application.dto.CommerceConnectionResponse;
+import com.ecom360.integration.commerce.application.dto.CommerceConnectionUpdateRequest;
 import com.ecom360.integration.commerce.domain.model.CommerceConnection;
 import com.ecom360.integration.commerce.domain.repository.CommerceConnectionRepository;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
@@ -22,8 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CommerceConnectionService {
 
-  public static final String INCOMING_WEBHOOK_PATH_PREFIX =
-      ApiConstants.API_BASE + "/public/commerce/webhooks/incoming/";
+  public static final String INCOMING_WEBHOOK_PATH_PREFIX = ApiConstants.API_BASE
+      + "/public/commerce/webhooks/incoming/";
 
   private final CommerceConnectionRepository connectionRepository;
   private final StoreRepository storeRepository;
@@ -77,6 +78,18 @@ public class CommerceConnectionService {
     subscriptionService.requireFeatureApi(p.businessId());
     permissionService.require(p, Permission.COMMERCE_CONNECTIONS_READ);
     return toResponse(findOwned(id, p));
+  }
+
+  @Transactional
+  public CommerceConnectionResponse update(
+      UUID id, CommerceConnectionUpdateRequest req, UserPrincipal p) {
+    requireBiz(p);
+    subscriptionService.requireFeatureApi(p.businessId());
+    permissionService.require(p, Permission.COMMERCE_CONNECTIONS_UPDATE);
+    CommerceConnection c = findOwned(id, p);
+    c.setIsActive(req.isActive());
+    c = connectionRepository.save(c);
+    return toResponse(c);
   }
 
   @Transactional
@@ -136,6 +149,7 @@ public class CommerceConnectionService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess())
+      throw new AccessDeniedException("Business context required");
   }
 }

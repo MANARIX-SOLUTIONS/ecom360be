@@ -4,6 +4,7 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.integration.commerce.application.dto.CommerceConnectionCreateRequest;
 import com.ecom360.integration.commerce.application.dto.CommerceConnectionCreateResponse;
 import com.ecom360.integration.commerce.application.dto.CommerceConnectionResponse;
+import com.ecom360.integration.commerce.application.dto.CommerceConnectionUpdateRequest;
 import com.ecom360.integration.commerce.application.service.CommerceConnectionService;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,9 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping(ApiConstants.API_BASE + "/commerce/connections")
-@Tag(
-    name = "Commerce connections",
-    description = "Connexions de boutiques en ligne (webhooks entrants, modèle canonique)")
+@Tag(name = "Commerce connections", description = "Connexions de boutiques en ligne (webhooks entrants, modèle canonique)")
 @SecurityRequirement(name = "bearerAuth")
 public class CommerceConnectionController {
 
@@ -52,6 +51,15 @@ public class CommerceConnectionController {
   public ResponseEntity<CommerceConnectionResponse> get(
       @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
     return ResponseEntity.ok(commerceConnectionService.getById(id, principal));
+  }
+
+  @PatchMapping("/{id}")
+  @Operation(summary = "Activer / désactiver une connexion")
+  public ResponseEntity<CommerceConnectionResponse> update(
+      @PathVariable UUID id,
+      @Valid @RequestBody CommerceConnectionUpdateRequest request,
+      @AuthenticationPrincipal UserPrincipal principal) {
+    return ResponseEntity.ok(commerceConnectionService.update(id, request, principal));
   }
 
   @DeleteMapping("/{id}")
