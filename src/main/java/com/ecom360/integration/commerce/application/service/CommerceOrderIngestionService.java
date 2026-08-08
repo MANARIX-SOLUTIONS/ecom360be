@@ -185,7 +185,9 @@ public class CommerceOrderIngestionService {
           payload,
           payloadHash,
           storedRaw,
-          "Paiement non confirmé pour création de vente (statut: " + payload.paymentStatus() + ").");
+          "Paiement non confirmé pour création de vente (statut: "
+              + payload.paymentStatus()
+              + ").");
       throw new BusinessRuleException(
           "Statut de paiement non éligible pour créer une vente (attendu: payé / completed / processing, etc.). Statut reçu : "
               + payload.paymentStatus());
@@ -289,12 +291,7 @@ public class CommerceOrderIngestionService {
     if (paymentStatus == null) return false;
     String s = paymentStatus.trim().toLowerCase(Locale.ROOT);
     return switch (s) {
-      case "paid",
-          "completed",
-          "captured",
-          "settled",
-          "paid_in_full",
-          "processing" -> true;
+      case "paid", "completed", "captured", "settled", "paid_in_full", "processing" -> true;
       default -> false;
     };
   }

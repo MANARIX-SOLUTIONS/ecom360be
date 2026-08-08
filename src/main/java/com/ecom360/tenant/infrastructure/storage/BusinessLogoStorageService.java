@@ -3,6 +3,7 @@ package com.ecom360.tenant.infrastructure.storage;
 import com.ecom360.shared.domain.exception.DomainException;
 import com.ecom360.shared.infrastructure.config.AppFilesProperties;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -11,7 +12,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
@@ -25,7 +25,8 @@ public class BusinessLogoStorageService {
   private static final Logger log = LoggerFactory.getLogger(BusinessLogoStorageService.class);
 
   private static final Pattern SAFE_FILENAME =
-      Pattern.compile("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\\.(png|jpg|jpeg|webp|gif)$");
+      Pattern.compile(
+          "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\\.(png|jpg|jpeg|webp|gif)$");
 
   private static final Set<String> ALLOWED_TYPES =
       Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
@@ -78,11 +79,7 @@ public class BusinessLogoStorageService {
     } catch (IOException e) {
       throw new DomainException("Enregistrement du fichier impossible", e);
     }
-    return ApiConstants.API_BASE
-        + "/public/business-logos/"
-        + businessId
-        + "/"
-        + filename;
+    return ApiConstants.API_BASE + "/public/business-logos/" + businessId + "/" + filename;
   }
 
   public void deleteManagedLogoIfPresent(UUID businessId, String logoUrl) {

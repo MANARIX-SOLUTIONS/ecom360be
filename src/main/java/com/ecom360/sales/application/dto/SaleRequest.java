@@ -14,7 +14,6 @@ public record SaleRequest(
     String note,
     @NotEmpty @Valid List<SaleLineRequest> lines) {
   public SaleRequest {
-    if (discountAmount == null)
-      discountAmount = 0;
+    if (discountAmount == null) discountAmount = 0;
   }
 }

@@ -42,7 +42,8 @@ public class CommerceConnectionService {
   }
 
   @Transactional
-  public CommerceConnectionCreateResponse create(CommerceConnectionCreateRequest req, UserPrincipal p) {
+  public CommerceConnectionCreateResponse create(
+      CommerceConnectionCreateRequest req, UserPrincipal p) {
     requireBiz(p);
     subscriptionService.requireFeatureApi(p.businessId());
     permissionService.require(p, Permission.COMMERCE_CONNECTIONS_CREATE);
