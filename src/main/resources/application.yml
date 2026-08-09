@@ -10,75 +10,6 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
-  datasource:
-    # Single placeholder only — avoids literal ${DB_HOST} when env is not loaded (e.g. systemd)
-    #    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-odd-surf-aiz9l39y-pooler.c-4.us-east-1.aws.neon.tech/ecom360pmedb_dev?sslmode=require&channelBinding=require}
-    #    username: ${DB_USERNAME:neondb_owner}
-    #    password: ${DB_PASSWORD:npg_X17KrjSIoVmD}
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      pool-name: ecom360-pool
-      auto-commit: false
-      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:20000}
-      idle-timeout: ${HIKARI_IDLE_TIMEOUT:300000}
-      max-lifetime: ${HIKARI_MAX_LIFETIME:1200000}
-      minimum-idle: ${HIKARI_MIN_IDLE:5}
-      maximum-pool-size: ${HIKARI_MAX_POOL:20}
-      leak-detection-threshold: ${HIKARI_LEAK_DETECTION:60000}
-      data-source-properties:
-        # PostgreSQL connection tuning
-        prepareThreshold: 5
-        preparedStatementCacheQueries: 256
-        preparedStatementCacheSizeMiB: 5
-        reWriteBatchedInserts: true
-
-  # ── JPA / Hibernate ──
-  jpa:
-    hibernate:
-      ddl-auto: update
-    open-in-view: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        jdbc:
-          batch_size: 25
-          fetch_size: 50
-        order_inserts: true
-        order_updates: true
-        batch_versioned_data: true
-        generate_statistics: ${HIBERNATE_STATS:false}
-        connection:
-          provider_disables_autocommit: true
-        default_schema: public
-
-  # ── Flyway ──
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
-    connect-retries: 3
-    connect-retries-interval: 5
-    validate-on-migrate: true
-    out-of-order: true # allow V8.1 to run after V8 was already applied
-
-  # ── Mail (optional — set MAIL_HOST to enable; when empty, emails are logged only) ──
-  mail:
-    host: ${MAIL_HOST:maildev}
-    port: ${MAIL_PORT:1025}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    default-encoding: UTF-8
-    from: ${MAIL_FROM:noreply@ecom360.local}
-    properties:
-      mail:
-        smtp:
-          auth: ${MAIL_USERNAME:false}
-          starttls:
-            enable: ${MAIL_USERNAME:false}
-
   servlet:
     multipart:
       max-file-size: 8MB
@@ -142,60 +73,6 @@ api:
   pagination:
     default-size: 20
     max-size: 100
-
-# ── App (frontend URL for email links) ──
-app:
-  url: ${APP_URL:http://localhost:5173}
-  files:
-    business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
-    product-images-dir: ${PRODUCT_IMAGES_DIR:./data/uploads/product-images}
-  subscription:
-    expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
-  payment:
-    provider: ${PAYMENT_PROVIDER:paydunya}
-    paydunya:
-      enabled: ${PAYDUNYA_ENABLED:false}
-      base-url: ${PAYDUNYA_BASE_URL:https://app.paydunya.com}
-      master-key: ${PAYDUNYA_MASTER_KEY:}
-      private-key: ${PAYDUNYA_PRIVATE_KEY:}
-      token: ${PAYDUNYA_TOKEN:}
-      store-name: ${PAYDUNYA_STORE_NAME:Ecom 360 PME}
-      api-public-url: ${APP_API_URL:http://localhost:8080}
-  cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
-    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
-    allowed-headers: "*"
-    max-age: 3600
-
-# ── OpenAPI / Swagger ──
-springdoc:
-  api-docs:
-    path: /api-docs
-    enabled: ${SWAGGER_ENABLED:true}
-  swagger-ui:
-    path: /swagger-ui.html
-    operations-sorter: method
-    tags-sorter: alpha
-    enabled: ${SWAGGER_ENABLED:true}
-
-# ── Actuator ──
-management:
-  endpoints:
-    web:
-      exposure:
-        include: ${ACTUATOR_ENDPOINTS:health,info,metrics,caches}
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: ${ACTUATOR_HEALTH_DETAILS:when_authorized}
-      probes:
-        enabled: true
-  info:
-    env:
-      enabled: true
-  metrics:
-    tags:
-      application: ${spring.application.name}
 
 # ── Logging (base — overridden per-profile) ──
 logging:

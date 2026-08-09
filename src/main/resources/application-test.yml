@@ -1,63 +1,153 @@
 # ──────────────────────────────────────────────────────────────
-# TEST profile — Fast CI/integration tests
-# Activate: SPRING_PROFILES_ACTIVE=test
-# Uses Testcontainers PostgreSQL (or override DB_* vars)
+# PROD profile — Hardened, performant, secure
+# Activate: SPRING_PROFILES_ACTIVE=prod
+# ALL secrets MUST come from env vars / vault — never defaults
 # ──────────────────────────────────────────────────────────────
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecom360_test}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/neondb}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
     hikari:
-      minimum-idle: 1
-      maximum-pool-size: 5
-      connection-timeout: 10000
-      leak-detection-threshold: 0   # off in tests
+      minimum-idle: ${HIKARI_MIN_IDLE:10}
+      maximum-pool-size: ${HIKARI_MAX_POOL:40}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:15000}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:180000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:900000}
+      leak-detection-threshold: 30000
+      data-source-properties:
+        prepareThreshold: 5
+        preparedStatementCacheQueries: 512
+        preparedStatementCacheSizeMiB: 10
+        reWriteBatchedInserts: true
 
   jpa:
-    show-sql: false
+    show-sql: true
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
     properties:
       hibernate:
+        format_sql: false
         generate_statistics: false
+        jdbc:
+          batch_size: 50
+          fetch_size: 100
+        query:
+          plan_cache_max_size: 2048
+          in_clause_parameter_padding: true
+
+  # ── Mail: empty by default on VPS (no maildev); set MAIL_HOST for real SMTP
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    from: ${MAIL_FROM:noreply@ecom360.local}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_USERNAME:false}
+          starttls:
+            enable: ${MAIL_USERNAME:false}
 
   flyway:
-    clean-disabled: false
-    clean-on-validation-error: true
+    enabled: false # no auto-migrate in prod; run migrations separately
+    clean-disabled: true # NEVER clean prod
+    validate-on-migrate: true
+    # out-of-order inherited from base (true) to allow V8.1 migration
 
   cache:
-    type: none                        # disable cache in tests
+    type: caffeine
+    caffeine:
+      spec: maximumSize=2000,expireAfterWrite=300s
 
-# ── Server (random port for parallel tests) ──
+# ── Server — production tuning ──
 server:
-  port: 0
+  port: 8090
+  error:
+    include-message: never # never leak internals
+    include-binding-errors: never
+    include-stacktrace: never
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
+  tomcat:
+    threads:
+      min-spare: 20
+      max: 400
+    accept-count: 200
+    max-connections: 16384
+    connection-timeout: 10000
+    keep-alive-timeout: 15000
+    max-keep-alive-requests: 200
+  http2:
+    enabled: true
 
-# ── JWT (short-lived for test speed) ──
+# ── JWT ──
 jwt:
-  secret: test-secret-key-min-32-chars-for-hmac-sha256-ok
-  expiration-ms: 60000                # 1 min
-  refresh-expiration-ms: 120000       # 2 min
+  secret: ${JWT_SECRET} # REQUIRED — no default
+  expiration-ms: 3600000 # 1h in prod
+  refresh-expiration-ms: 86400000 # 24h
 
-# ── Swagger OFF ──
+# ── CORS — restrict to known origins ──
+app:
+  url: ${APP_URL:http://localhost:5173}
+  files:
+    business-logos-dir: ${BUSINESS_LOGOS_DIR:./data/uploads/business-logos}
+    product-images-dir: ${PRODUCT_IMAGES_DIR:./data/uploads/product-images}
+  subscription:
+    expiration-cron: ${SUBSCRIPTION_EXPIRATION_CRON:0 0 2 * * ?}
+  payment:
+    provider: ${PAYMENT_PROVIDER:paydunya}
+    paydunya:
+      enabled: ${PAYDUNYA_ENABLED:false}
+      base-url: ${PAYDUNYA_BASE_URL:https://app.paydunya.com}
+      master-key: ${PAYDUNYA_MASTER_KEY:}
+      private-key: ${PAYDUNYA_PRIVATE_KEY:}
+      token: ${PAYDUNYA_TOKEN:}
+      store-name: ${PAYDUNYA_STORE_NAME:Ecom 360 PME}
+      api-public-url: ${APP_API_URL:http://localhost:8080}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
+    max-age: 3600
+
+# ── Swagger OFF in prod ──
 springdoc:
   api-docs:
     enabled: false
   swagger-ui:
     enabled: false
 
-# ── Actuator — minimal ──
+# ── Actuator — secured, limited ──
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,metrics,prometheus,caches
+  endpoint:
+    health:
+      show-details: when_authorized
+      group:
+        readiness:
+          include: db,diskSpace
+        liveness:
+          include: ping
 
-# ── Logging — quiet ──
+# ── Logging — structured JSON for log aggregation ──
 logging:
   level:
     root: WARN
     com.ecom360: INFO
-    org.springframework: WARN
+    org.springframework.security: WARN
     org.hibernate: WARN
-    org.flywaydb: WARN
-    org.testcontainers: INFO
+    org.flywaydb: INFO
+  pattern:
+    # Fallback if logback-spring.xml isn't used
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
