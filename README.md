@@ -68,6 +68,12 @@ DB_HOST=localhost DB_PORT=5432 DB_NAME=ecom360 DB_USERNAME=postgres DB_PASSWORD=
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/api-docs
 
+## Engineering docs
+
+| Guide | Topic |
+|-------|--------|
+| [docs/expenses.md](docs/expenses.md) | Expense categories/CRUD, `featureExpenses` gate, retention clamp, dashboard / « Communes » sums |
+
 ## API Endpoints
 
 ### Public
