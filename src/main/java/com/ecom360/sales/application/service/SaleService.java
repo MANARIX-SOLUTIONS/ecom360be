@@ -2,6 +2,7 @@ package com.ecom360.sales.application.service;
 
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.ProductRepository;
+import com.ecom360.client.domain.ClientCreditPolicy;
 import com.ecom360.client.domain.model.Client;
 import com.ecom360.client.domain.repository.ClientRepository;
 import com.ecom360.identity.application.service.RolePermissionService;
@@ -14,6 +15,7 @@ import com.ecom360.sales.domain.repository.*;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import com.ecom360.tenant.domain.model.Plan;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -60,16 +62,13 @@ public class SaleService {
   public SaleResponse createSale(SaleRequest req, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_CREATE);
-    if ("credit".equals(req.paymentMethod())) {
-      throw new BusinessRuleException(
-          "Les ventes à crédit client ne sont pas disponibles au point de vente.");
-    }
     validateSubscriptionForSale(p.businessId(), req.paymentMethod());
     storeRepo
         .findById(req.storeId())
         .filter(s -> s.belongsTo(p.businessId()))
         .orElseThrow(() -> new ResourceNotFoundException("Store", req.storeId()));
-    UUID clientId = requireClientForPosSale(req.clientId(), p.businessId());
+    UUID clientId = requireClientForPosSale(
+        req.clientId(), p.businessId(), req.paymentMethod());
 
     List<LineSpec> specs = new ArrayList<>();
     for (SaleLineRequest lr : req.lines()) {
@@ -109,6 +108,9 @@ public class SaleService {
       int discountAmount,
       String note,
       List<ImportedSaleLine> lines) {
+    if (ClientCreditPolicy.isCreditPayment(paymentMethod)) {
+      throw new BusinessRuleException(ClientCreditPolicy.IMPORT_CREDIT_FORBIDDEN);
+    }
     validateSubscriptionForSale(businessId, paymentMethod);
     storeRepo
         .findById(storeId)
@@ -156,29 +158,29 @@ public class SaleService {
                           + " ventes/mois. Passez à un plan supérieur.");
                 }
               }
-              if (("wave".equals(paymentMethod) || "orange_money".equals(paymentMethod))
-                  && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
-                throw new BusinessRuleException(
-                    "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
-              }
+              rejectUnsupportedPaymentMethods(plan, paymentMethod);
             });
   }
 
   /**
-   * Wave / Orange Money — sans contrôle du quota mensuel de ventes (réservé aux
-   * mises à jour).
+   * Wave / Orange Money / crédit — sans contrôle du quota mensuel de ventes
+   * (réservé aux mises à jour).
    */
   private void validatePlanPaymentMethodsOnly(UUID businessId, String paymentMethod) {
     subscriptionService
         .getPlanForBusiness(businessId)
-        .ifPresent(
-            plan -> {
-              if (("wave".equals(paymentMethod) || "orange_money".equals(paymentMethod))
-                  && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
-                throw new BusinessRuleException(
-                    "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
-              }
-            });
+        .ifPresent(plan -> rejectUnsupportedPaymentMethods(plan, paymentMethod));
+  }
+
+  private void rejectUnsupportedPaymentMethods(Plan plan, String paymentMethod) {
+    if (("wave".equals(paymentMethod) || "orange_money".equals(paymentMethod))
+        && !Boolean.TRUE.equals(plan.getFeatureMultiPayment())) {
+      throw new BusinessRuleException(
+          "Paiement mobile (Wave, Orange Money) non inclus dans votre plan. Passez à un plan supérieur.");
+    }
+    if (ClientCreditPolicy.isCreditPayment(paymentMethod)) {
+      ClientCreditPolicy.requireFeatureEnabled(plan.getFeatureClientCredits());
+    }
   }
 
   private SaleResponse persistSaleFromLineSpecs(
@@ -228,6 +230,7 @@ public class SaleService {
       Client c = clientRepo
           .findByBusinessIdAndId(businessId, clientId)
           .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+      ClientCreditPolicy.requireNamedClientForCredit(paymentMethod, c);
       c.addCredit(sale.getTotal());
       clientRepo.save(c);
     }
@@ -287,22 +290,12 @@ public class SaleService {
     if (!sale.getStoreId().equals(req.storeId())) {
       throw new BusinessRuleException("La boutique de la vente ne peut pas être changée.");
     }
-    if ("credit".equals(req.paymentMethod())) {
-      subscriptionService
-          .getPlanForBusiness(p.businessId())
-          .ifPresent(
-              plan -> {
-                if (!Boolean.TRUE.equals(plan.getFeatureClientCredits())) {
-                  throw new BusinessRuleException(
-                      "Crédits clients non inclus dans votre plan. Passez à un plan supérieur.");
-                }
-              });
-    }
     storeRepo
         .findById(req.storeId())
         .filter(s -> s.belongsTo(p.businessId()))
         .orElseThrow(() -> new ResourceNotFoundException("Store", req.storeId()));
-    UUID clientId = requireClientForPosSale(req.clientId(), p.businessId());
+    UUID clientId = requireClientForPosSale(
+        req.clientId(), p.businessId(), req.paymentMethod());
     validatePlanPaymentMethodsOnly(p.businessId(), req.paymentMethod());
 
     List<SaleLine> oldLines = lineRepo.findBySaleId(sale.getId());
@@ -374,8 +367,9 @@ public class SaleService {
 
     if (sale.isCreditSale()) {
       Client c = clientRepo
-          .findByBusinessIdAndId(p.businessId(), req.clientId())
-          .orElseThrow(() -> new ResourceNotFoundException("Client", req.clientId()));
+          .findByBusinessIdAndId(p.businessId(), clientId)
+          .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+      ClientCreditPolicy.requireNamedClientForCredit(req.paymentMethod(), c);
       c.addCredit(newTotal);
       clientRepo.save(c);
     }
@@ -384,13 +378,15 @@ public class SaleService {
     return mapSale(sale);
   }
 
-  private UUID requireClientForPosSale(UUID clientId, UUID businessId) {
+  private UUID requireClientForPosSale(
+      UUID clientId, UUID businessId, String paymentMethod) {
     if (clientId == null) {
       throw new BusinessRuleException("Client obligatoire pour cette vente.");
     }
-    clientRepo
+    Client client = clientRepo
         .findByBusinessIdAndId(businessId, clientId)
         .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+    ClientCreditPolicy.requireNamedClientForCredit(paymentMethod, client);
     return clientId;
   }
 

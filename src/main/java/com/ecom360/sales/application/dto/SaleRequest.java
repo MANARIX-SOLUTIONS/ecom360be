@@ -8,7 +8,7 @@ import java.util.UUID;
 public record SaleRequest(
     @NotNull UUID storeId,
     @NotNull UUID clientId,
-    @NotBlank String paymentMethod,
+    @NotBlank @Pattern(regexp = "cash|wave|orange_money|credit") String paymentMethod,
     @Min(0) Integer discountAmount,
     @Min(0) Integer amountReceived,
     String note,

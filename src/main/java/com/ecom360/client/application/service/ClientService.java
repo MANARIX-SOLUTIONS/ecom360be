@@ -1,6 +1,7 @@
 package com.ecom360.client.application.service;
 
 import com.ecom360.client.application.dto.*;
+import com.ecom360.client.domain.ClientCreditPolicy;
 import com.ecom360.client.domain.model.*;
 import com.ecom360.client.domain.repository.*;
 import com.ecom360.identity.application.service.RolePermissionService;
@@ -104,13 +105,9 @@ public class ClientService {
     subscriptionService
         .getPlanForBusiness(p.businessId())
         .ifPresent(
-            plan -> {
-              if (!Boolean.TRUE.equals(plan.getFeatureClientCredits())) {
-                throw new BusinessRuleException(
-                    "Crédits clients non inclus dans votre plan. Passez à un plan supérieur.");
-              }
-            });
+            plan -> ClientCreditPolicy.requireFeatureEnabled(plan.getFeatureClientCredits()));
     Client c = find(clientId, p);
+    ClientCreditPolicy.requireRepayment(c, r.amount());
     c.deductCredit(r.amount());
     clientRepo.save(c);
     ClientPayment pay = new ClientPayment();
