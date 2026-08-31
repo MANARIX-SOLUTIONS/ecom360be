@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
@@ -58,11 +58,24 @@ public class PurchaseOrderController {
   @Operation(summary = "Update purchase order status")
   public ResponseEntity<PurchaseOrderResponse> updateStatus(
       @PathVariable UUID id,
-      @RequestBody Map<String, String> body,
+      @Valid @RequestBody PurchaseOrderStatusUpdateRequest body,
       @AuthenticationPrincipal UserPrincipal p) {
-    String status = body != null ? body.get("status") : null;
-    if (status == null || status.isBlank())
-      throw new IllegalArgumentException("status is required");
-    return ResponseEntity.ok(svc.updateStatus(id, status, p));
+    return ResponseEntity.ok(svc.updateStatus(id, body, p));
+  }
+
+  @PostMapping("/{id}/payments")
+  @Operation(summary = "Record a payment against the outstanding balance of a purchase order")
+  public ResponseEntity<PurchaseOrderPaymentResponse> recordPayment(
+      @PathVariable UUID id,
+      @Valid @RequestBody PurchaseOrderPaymentRequest r,
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.status(201).body(svc.recordPayment(id, r, p));
+  }
+
+  @GetMapping("/{id}/payments")
+  @Operation(summary = "List payments recorded on a purchase order")
+  public ResponseEntity<List<PurchaseOrderPaymentResponse>> listPayments(
+      @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(svc.listPayments(id, p));
   }
 }

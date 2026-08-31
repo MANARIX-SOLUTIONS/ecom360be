@@ -1,6 +1,7 @@
 package com.ecom360.sales.application.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +18,10 @@ public record SaleResponse(
     Integer subtotal,
     Integer discountAmount,
     Integer total,
+    Integer amountPaid,
+    Integer remainingAmount,
+    String paymentStatus,
+    LocalDate dueDate,
     Integer amountReceived,
     Integer changeGiven,
     String status,

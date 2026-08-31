@@ -55,6 +55,13 @@ public record DashboardResponse(
                 /** Somme des soldes crédit &gt; 0 (FCFA). */
                 long totalReceivable,
                 /**
+                 * Trésorerie réellement encaissée sur la période (versements), à distinguer du
+                 * CA facturé {@code periodRevenue} qui compte les ventes à leur total.
+                 */
+                long periodCashCollected,
+                /** Reste à encaisser sur l'ensemble des ventes validées (FCFA). */
+                long outstandingSalesAmount,
+                /**
                  * CA completed par jour civil (timezone serveur) sur la période effective.
                  */
                 List<DailyAmount> periodDailySales,

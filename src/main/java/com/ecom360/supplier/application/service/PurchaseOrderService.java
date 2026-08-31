@@ -8,6 +8,7 @@ import com.ecom360.inventory.application.service.StockService;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.supplier.application.dto.*;
+import com.ecom360.supplier.domain.PurchaseOrderPaymentPolicy;
 import com.ecom360.supplier.domain.model.*;
 import com.ecom360.supplier.domain.repository.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PurchaseOrderService {
   private final PurchaseOrderRepository poRepo;
   private final PurchaseOrderLineRepository lineRepo;
+  private final PurchaseOrderPaymentRepository poPaymentRepo;
   private final SupplierRepository supplierRepo;
   private final ProductRepository productRepo;
   private final StoreRepository storeRepo;
@@ -32,6 +34,7 @@ public class PurchaseOrderService {
   public PurchaseOrderService(
       PurchaseOrderRepository poRepo,
       PurchaseOrderLineRepository lineRepo,
+      PurchaseOrderPaymentRepository poPaymentRepo,
       SupplierRepository supplierRepo,
       ProductRepository productRepo,
       StoreRepository storeRepo,
@@ -40,6 +43,7 @@ public class PurchaseOrderService {
       SubscriptionService subscriptionService) {
     this.poRepo = poRepo;
     this.lineRepo = lineRepo;
+    this.poPaymentRepo = poPaymentRepo;
     this.supplierRepo = supplierRepo;
     this.productRepo = productRepo;
     this.storeRepo = storeRepo;
@@ -75,6 +79,8 @@ public class PurchaseOrderService {
     po.setExpectedDate(r.expectedDate());
     po.setNote(r.note());
     po.setTotalAmount(0);
+    po.setAmountPaid(0);
+    po.setPaymentStatus(PurchaseOrderPaymentStatus.UNPAID);
     po = poRepo.save(po);
 
     int total = 0;
@@ -131,13 +137,15 @@ public class PurchaseOrderService {
   }
 
   @Transactional
-  public PurchaseOrderResponse updateStatus(UUID id, String newStatus, UserPrincipal p) {
+  public PurchaseOrderResponse updateStatus(
+      UUID id, PurchaseOrderStatusUpdateRequest req, UserPrincipal p) {
     requireBiz(p);
     requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
     PurchaseOrder po = poRepo
         .findByBusinessIdAndIdForUpdate(p.businessId(), id)
         .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", id));
+    String newStatus = req.status();
     po.transitionTo(newStatus);
     if ("received".equals(newStatus)) {
       List<PurchaseOrderLine> lines = lineRepo.findByPurchaseOrderId(po.getId());
@@ -148,13 +156,78 @@ public class PurchaseOrderService {
             p.userId(),
             line.getQuantity(),
             po.getReference());
+      // Acompte omis (null) ou 0 : dette égale au total, comportement historique.
+      int amountPaid = req.amountPaid() == null ? 0 : req.amountPaid();
+      PurchaseOrderPaymentPolicy.requireValidDeposit(amountPaid, po.getTotalAmount());
+      po.setAmountPaid(amountPaid);
+      po.recomputePaymentStatus();
+      po.setDueDate(amountPaid < po.getTotalAmount() ? req.dueDate() : null);
+
       Supplier sup = supplierRepo
           .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
           .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
-      sup.addToBalance(po.getTotalAmount());
+      sup.addToBalance(po.getRemainingAmount());
       supplierRepo.save(sup);
+
+      if (amountPaid > 0) {
+        String method = req.paymentMethod() != null ? req.paymentMethod() : "cash";
+        poPaymentRepo.save(
+            PurchaseOrderPayment.record(
+                po, p.userId(), amountPaid, method, PurchaseOrderPaymentKind.DEPOSIT, null));
+      }
     }
     return mapPO(poRepo.save(po));
+  }
+
+  /**
+   * Règle un versement sur le solde d'un bon réceptionné. Déduit le solde
+   * fournisseur sans créer de {@code SupplierPayment} (même logique que vente vs
+   * client_payment).
+   */
+  @Transactional
+  public PurchaseOrderPaymentResponse recordPayment(
+      UUID poId, PurchaseOrderPaymentRequest req, UserPrincipal p) {
+    requireBiz(p);
+    requireSupplierTracking(p);
+    permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
+    PurchaseOrder po = poRepo
+        .findByBusinessIdAndIdForUpdate(p.businessId(), poId)
+        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId));
+    PurchaseOrderPaymentPolicy.requirePayment(po, req.amount());
+
+    po.applyPayment(req.amount());
+    if (!po.hasOutstandingBalance()) {
+      po.setDueDate(null);
+    }
+    poRepo.save(po);
+
+    Supplier sup = supplierRepo
+        .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
+        .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
+    sup.deductFromBalance(req.amount());
+    supplierRepo.save(sup);
+
+    PurchaseOrderPayment payment = poPaymentRepo.save(
+        PurchaseOrderPayment.record(
+            po,
+            p.userId(),
+            req.amount(),
+            req.paymentMethod(),
+            PurchaseOrderPaymentKind.INSTALLMENT,
+            req.note()));
+    return mapPayment(payment);
+  }
+
+  public List<PurchaseOrderPaymentResponse> listPayments(UUID poId, UserPrincipal p) {
+    requireBiz(p);
+    requireSupplierTracking(p);
+    permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
+    PurchaseOrder po = poRepo
+        .findByBusinessIdAndId(p.businessId(), poId)
+        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId));
+    return poPaymentRepo.findByPurchaseOrderIdOrderByCreatedAtAsc(po.getId()).stream()
+        .map(this::mapPayment)
+        .toList();
   }
 
   private String genRef(UUID bizId) {
@@ -190,11 +263,28 @@ public class PurchaseOrderService {
         po.getReference(),
         po.getStatus(),
         po.getTotalAmount(),
+        po.getAmountPaid() == null ? 0 : po.getAmountPaid(),
+        po.getRemainingAmount(),
+        po.getPaymentStatus(),
+        po.getDueDate(),
         po.getExpectedDate(),
         po.getReceivedDate(),
         po.getNote(),
         lines,
         po.getCreatedAt(),
         po.getUpdatedAt());
+  }
+
+  private PurchaseOrderPaymentResponse mapPayment(PurchaseOrderPayment p) {
+    return new PurchaseOrderPaymentResponse(
+        p.getId(),
+        p.getPurchaseOrderId(),
+        p.getStoreId(),
+        p.getUserId(),
+        p.getAmount(),
+        p.getPaymentMethod(),
+        p.getKind(),
+        p.getNote(),
+        p.getCreatedAt());
   }
 }

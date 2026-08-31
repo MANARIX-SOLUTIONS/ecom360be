@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -54,6 +55,8 @@ public class SaleController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate periodEnd,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String paymentStatus,
+      @RequestParam(required = false) UUID clientId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @AuthenticationPrincipal UserPrincipal p) {
@@ -68,6 +71,8 @@ public class SaleController {
                 from,
                 to,
                 status != null && !status.isBlank() ? status : null,
+                paymentStatus != null && !paymentStatus.isBlank() ? paymentStatus : null,
+                clientId,
                 PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending()))));
   }
 
@@ -85,5 +90,21 @@ public class SaleController {
   public ResponseEntity<SaleResponse> voidSale(
       @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(svc.voidSale(id, p));
+  }
+
+  @PostMapping("/{id}/payments")
+  @Operation(summary = "Record a payment against the outstanding balance of a sale")
+  public ResponseEntity<SalePaymentResponse> recordPayment(
+      @PathVariable UUID id,
+      @Valid @RequestBody SalePaymentRequest r,
+      @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.status(201).body(svc.recordPayment(id, r, p));
+  }
+
+  @GetMapping("/{id}/payments")
+  @Operation(summary = "List payments recorded on a sale")
+  public ResponseEntity<List<SalePaymentResponse>> listPayments(
+      @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(svc.listPayments(id, p));
   }
 }

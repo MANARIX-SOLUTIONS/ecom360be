@@ -109,6 +109,8 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
         @Query("SELECT s FROM Sale s WHERE s.businessId = :bId "
                         + "AND (:storeId IS NULL OR s.storeId = :storeId) "
                         + "AND (:status IS NULL OR s.status = :status) "
+                        + "AND (:paymentStatus IS NULL OR s.paymentStatus = :paymentStatus) "
+                        + "AND (:clientId IS NULL OR s.clientId = :clientId) "
                         + "AND (CAST(:from AS timestamp) IS NULL OR s.createdAt >= :from) "
                         + "AND (CAST(:to AS timestamp) IS NULL OR s.createdAt < :to) "
                         + "ORDER BY s.createdAt DESC")
@@ -116,7 +118,26 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
                         @Param("bId") UUID businessId,
                         @Param("storeId") UUID storeId,
                         @Param("status") String status,
+                        @Param("paymentStatus") String paymentStatus,
+                        @Param("clientId") UUID clientId,
                         @Param("from") Instant from,
                         @Param("to") Instant to,
                         Pageable pageable);
+
+        /**
+         * Ventes validées d'un client encore partiellement ou totalement impayées,
+         * de la plus ancienne à la plus récente (imputation FIFO des remboursements).
+         */
+        @Query("SELECT s FROM Sale s WHERE s.businessId = :bId AND s.clientId = :clientId"
+                        + " AND s.status = 'completed' AND s.amountPaid < s.total"
+                        + " ORDER BY s.createdAt ASC, s.id ASC")
+        List<Sale> findOutstandingByClient(
+                        @Param("bId") UUID businessId, @Param("clientId") UUID clientId);
+
+        /** Reste à encaisser sur l'ensemble des ventes validées, optionnellement par boutique. */
+        @Query("SELECT COALESCE(SUM(s.total - s.amountPaid), 0) FROM Sale s"
+                        + " WHERE s.businessId = :bId AND s.status = 'completed'"
+                        + " AND s.amountPaid < s.total"
+                        + " AND (:storeId IS NULL OR s.storeId = :storeId)")
+        long sumOutstanding(@Param("bId") UUID businessId, @Param("storeId") UUID storeId);
 }

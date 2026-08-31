@@ -2,6 +2,7 @@ package com.ecom360.sales.domain.model;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -38,6 +39,15 @@ public class Sale {
   @Column(nullable = false)
   private Integer total;
 
+  @Column(name = "amount_paid", nullable = false)
+  private Integer amountPaid = 0;
+
+  @Column(name = "payment_status", nullable = false)
+  private String paymentStatus = SalePaymentStatus.PAID;
+
+  @Column(name = "due_date")
+  private LocalDate dueDate;
+
   @Column(name = "amount_received")
   private Integer amountReceived;
 
@@ -68,6 +78,35 @@ public class Sale {
 
   public boolean isCreditSale() {
     return "credit".equals(paymentMethod) && clientId != null;
+  }
+
+  /** Solde restant à encaisser sur cette vente. */
+  public int getRemainingAmount() {
+    int due = total == null ? 0 : total;
+    int paid = amountPaid == null ? 0 : amountPaid;
+    return Math.max(0, due - paid);
+  }
+
+  public boolean hasOutstandingBalance() {
+    return getRemainingAmount() > 0;
+  }
+
+  /** Impute un encaissement et recalcule le statut de paiement. */
+  public void applyPayment(int amount) {
+    this.amountPaid = (amountPaid == null ? 0 : amountPaid) + amount;
+    recomputePaymentStatus();
+  }
+
+  public void recomputePaymentStatus() {
+    int due = total == null ? 0 : total;
+    int paid = amountPaid == null ? 0 : amountPaid;
+    if (paid >= due) {
+      this.paymentStatus = SalePaymentStatus.PAID;
+    } else if (paid > 0) {
+      this.paymentStatus = SalePaymentStatus.PARTIAL;
+    } else {
+      this.paymentStatus = SalePaymentStatus.UNPAID;
+    }
   }
 
   public UUID getId() {
@@ -148,6 +187,30 @@ public class Sale {
 
   public void setTotal(Integer v) {
     this.total = v;
+  }
+
+  public Integer getAmountPaid() {
+    return amountPaid;
+  }
+
+  public void setAmountPaid(Integer v) {
+    this.amountPaid = v;
+  }
+
+  public String getPaymentStatus() {
+    return paymentStatus;
+  }
+
+  public void setPaymentStatus(String v) {
+    this.paymentStatus = v;
+  }
+
+  public LocalDate getDueDate() {
+    return dueDate;
+  }
+
+  public void setDueDate(LocalDate v) {
+    this.dueDate = v;
   }
 
   public Integer getAmountReceived() {
