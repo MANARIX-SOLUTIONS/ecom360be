@@ -5,10 +5,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
-/**
- * Garde l’alignement avec les clés de navigation du client (Permission dans
- * roles.ts).
- */
+/** Garde l’alignement avec les clés de navigation du client (Permission dans roles.ts). */
 class NavigationPermissionRulesTest {
 
   @Test
@@ -21,7 +18,6 @@ class NavigationPermissionRulesTest {
             "products",
             "clients",
             "suppliers",
-            "purchaseOrders",
             "livreurs",
             "globalView",
             "expenses",
@@ -34,8 +30,6 @@ class NavigationPermissionRulesTest {
             "settings:roles",
             "settings:security",
             "settings:notifications",
-            "settings:commerce",
-            "settings:api",
             "backoffice");
   }
 

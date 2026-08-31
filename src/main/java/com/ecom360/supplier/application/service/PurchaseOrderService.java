@@ -111,22 +111,14 @@ public class PurchaseOrderService {
     requireBiz(p);
     requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
-    if (status != null && supplierId != null) {
-      return poRepo
-          .findByBusinessIdAndStatusAndSupplierIdOrderByCreatedAtDesc(
-              p.businessId(), status, supplierId, pg)
-          .map(this::mapPO);
-    }
-    if (status != null) {
+    if (status != null)
       return poRepo
           .findByBusinessIdAndStatusOrderByCreatedAtDesc(p.businessId(), status, pg)
           .map(this::mapPO);
-    }
-    if (supplierId != null) {
+    if (supplierId != null)
       return poRepo
           .findByBusinessIdAndSupplierIdOrderByCreatedAtDesc(p.businessId(), supplierId, pg)
           .map(this::mapPO);
-    }
     return poRepo.findByBusinessIdOrderByCreatedAtDesc(p.businessId(), pg).map(this::mapPO);
   }
 
@@ -135,9 +127,10 @@ public class PurchaseOrderService {
     requireBiz(p);
     requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
-    PurchaseOrder po = poRepo
-        .findByBusinessIdAndIdForUpdate(p.businessId(), id)
-        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", id));
+    PurchaseOrder po =
+        poRepo
+            .findByBusinessIdAndId(p.businessId(), id)
+            .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", id));
     po.transitionTo(newStatus);
     if ("received".equals(newStatus)) {
       List<PurchaseOrderLine> lines = lineRepo.findByPurchaseOrderId(po.getId());
@@ -148,9 +141,10 @@ public class PurchaseOrderService {
             p.userId(),
             line.getQuantity(),
             po.getReference());
-      Supplier sup = supplierRepo
-          .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
-          .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
+      Supplier sup =
+          supplierRepo
+              .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
+              .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
       sup.addToBalance(po.getTotalAmount());
       supplierRepo.save(sup);
     }
@@ -167,20 +161,21 @@ public class PurchaseOrderService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private PurchaseOrderResponse mapPO(PurchaseOrder po) {
-    List<PurchaseOrderLineResponse> lines = lineRepo.findByPurchaseOrderId(po.getId()).stream()
-        .map(
-            l -> new PurchaseOrderLineResponse(
-                l.getId(),
-                l.getProductId(),
-                l.getQuantity(),
-                l.getUnitCost(),
-                l.getLineTotal()))
-        .toList();
+    List<PurchaseOrderLineResponse> lines =
+        lineRepo.findByPurchaseOrderId(po.getId()).stream()
+            .map(
+                l ->
+                    new PurchaseOrderLineResponse(
+                        l.getId(),
+                        l.getProductId(),
+                        l.getQuantity(),
+                        l.getUnitCost(),
+                        l.getLineTotal()))
+            .toList();
     return new PurchaseOrderResponse(
         po.getId(),
         po.getBusinessId(),

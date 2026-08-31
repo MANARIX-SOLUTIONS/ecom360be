@@ -201,36 +201,36 @@ public class SubscriptionService {
   }
 
   public void requireFeatureReports(UUID businessId) {
-    var plan = getPlanForBusiness(businessId)
-        .orElseThrow(
-            () -> new AccessDeniedException(
-                "Aucun abonnement actif. Souscrivez à un plan pour accéder aux rapports."));
-    if (!Boolean.TRUE.equals(plan.getFeatureReports())) {
-      throw new AccessDeniedException(
-          "Rapports et analyses non inclus dans le plan Starter. Passez au plan Pro.");
-    }
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureReports())) {
+                throw new AccessDeniedException(
+                    "Rapports et analyses non inclus dans le plan Starter. Passez au plan Pro.");
+              }
+            });
   }
 
   public void requireFeatureApi(UUID businessId) {
-    var plan = getPlanForBusiness(businessId)
-        .orElseThrow(
-            () -> new AccessDeniedException(
-                "Aucun abonnement actif. Souscrivez à un plan Business pour l'API."));
-    if (!Boolean.TRUE.equals(plan.getFeatureApi())) {
-      throw new AccessDeniedException(
-          "API, clés d'accès et webhooks sont réservés au plan Business.");
-    }
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureApi())) {
+                throw new AccessDeniedException(
+                    "API, clés d'accès et webhooks sont réservés au plan Business.");
+              }
+            });
   }
 
   public void requireSupplierTracking(UUID businessId) {
-    var plan = getPlanForBusiness(businessId)
-        .orElseThrow(
-            () -> new AccessDeniedException(
-                "Aucun abonnement actif. Souscrivez à un plan pour les fournisseurs."));
-    if (!Boolean.TRUE.equals(plan.getFeatureSupplierTracking())) {
-      throw new AccessDeniedException(
-          "Commandes et suivi fournisseurs avancé non inclus dans votre plan. Passez au plan Pro.");
-    }
+    getPlanForBusiness(businessId)
+        .ifPresent(
+            plan -> {
+              if (!Boolean.TRUE.equals(plan.getFeatureSupplierTracking())) {
+                throw new AccessDeniedException(
+                    "Commandes et suivi fournisseurs avancé non inclus dans votre plan. Passez au plan Pro.");
+              }
+            });
   }
 
   /**

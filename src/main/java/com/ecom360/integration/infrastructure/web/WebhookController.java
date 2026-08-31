@@ -4,7 +4,6 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.integration.application.dto.WebhookCreateResponse;
 import com.ecom360.integration.application.dto.WebhookRequest;
 import com.ecom360.integration.application.dto.WebhookResponse;
-import com.ecom360.integration.application.dto.WebhookTestResponse;
 import com.ecom360.integration.application.service.WebhookService;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,12 +63,5 @@ public class WebhookController {
       @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
     webhookService.delete(id, p);
     return ResponseEntity.noContent().build();
-  }
-
-  @PostMapping("/{id}/test")
-  @Operation(summary = "Envoyer un événement de test vers l'URL du webhook")
-  public ResponseEntity<WebhookTestResponse> test(
-      @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal p) {
-    return ResponseEntity.ok(webhookService.sendTest(id, p));
   }
 }
