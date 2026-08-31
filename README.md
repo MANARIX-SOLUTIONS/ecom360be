@@ -68,6 +68,13 @@ DB_HOST=localhost DB_PORT=5432 DB_NAME=ecom360 DB_USERNAME=postgres DB_PASSWORD=
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/api-docs
 
+## Engineering docs
+
+| Guide | Topic |
+|-------|--------|
+| [docs/admin-platform.md](docs/admin-platform.md) | Platform-admin backoffice (`/api/v1/admin/**`), plan/renew, invite pitfalls |
+| [docs/audit-log.md](docs/audit-log.md) | Audit writers, tenant vs admin list filters, request-id correlation |
+
 ## API Endpoints
 
 ### Public
