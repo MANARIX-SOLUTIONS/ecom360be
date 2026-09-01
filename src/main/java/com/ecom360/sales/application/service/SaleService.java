@@ -22,7 +22,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -67,14 +69,22 @@ public class SaleService {
         .findById(req.storeId())
         .filter(s -> s.belongsTo(p.businessId()))
         .orElseThrow(() -> new ResourceNotFoundException("Store", req.storeId()));
-    UUID clientId = requireClientForPosSale(
-        req.clientId(), p.businessId(), req.paymentMethod());
+    UUID clientId = requireClientForPosSale(req.clientId(), p.businessId(), req.paymentMethod());
+
+    if (req.clientSaleId() != null) {
+      Optional<Sale> existing =
+          saleRepo.findByBusinessIdAndClientSaleId(p.businessId(), req.clientSaleId().toString());
+      if (existing.isPresent()) {
+        return mapSale(existing.get());
+      }
+    }
 
     List<LineSpec> specs = new ArrayList<>();
     for (SaleLineRequest lr : req.lines()) {
-      Product prod = productRepo
-          .findByBusinessIdAndId(p.businessId(), lr.productId())
-          .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(p.businessId(), lr.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
       Integer salePv = prod.getSalePrice();
       if (salePv == null || salePv <= 0) {
         throw new BusinessRuleException(
@@ -82,21 +92,31 @@ public class SaleService {
       }
       specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), salePv));
     }
-    return persistSaleFromLineSpecs(
-        p.businessId(),
-        req.storeId(),
-        p.userId(),
-        clientId,
-        req.paymentMethod(),
-        req.discountAmount(),
-        req.amountReceived(),
-        req.note(),
-        specs);
+    try {
+      return persistSaleFromLineSpecs(
+          p.businessId(),
+          req.storeId(),
+          p.userId(),
+          clientId,
+          req.paymentMethod(),
+          req.discountAmount(),
+          req.amountReceived(),
+          req.note(),
+          specs,
+          req.clientSaleId() != null ? req.clientSaleId().toString() : null);
+    } catch (DataIntegrityViolationException ex) {
+      if (req.clientSaleId() != null) {
+        return saleRepo
+            .findByBusinessIdAndClientSaleId(p.businessId(), req.clientSaleId().toString())
+            .map(this::mapSale)
+            .orElseThrow(() -> ex);
+      }
+      throw ex;
+    }
   }
 
   /**
-   * Création de vente depuis une intégration commerce (sans contrôle de
-   * permission POS). Les lignes
+   * Création de vente depuis une intégration commerce (sans contrôle de permission POS). Les lignes
    * portent les prix issus du site.
    */
   @Transactional
@@ -118,14 +138,16 @@ public class SaleService {
         .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
     List<LineSpec> specs = new ArrayList<>();
     for (ImportedSaleLine il : lines) {
-      Product prod = productRepo
-          .findByBusinessIdAndId(businessId, il.productId())
-          .orElseThrow(() -> new ResourceNotFoundException("Product", il.productId()));
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(businessId, il.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", il.productId()));
       if (!prod.getStoreId().equals(storeId)) {
         throw new BusinessRuleException(
             "Le produit n'appartient pas à la boutique liée à cette connexion commerce.");
       }
-      String lineName = il.lineLabel() != null && !il.lineLabel().isBlank() ? il.lineLabel() : prod.getName();
+      String lineName =
+          il.lineLabel() != null && !il.lineLabel().isBlank() ? il.lineLabel() : prod.getName();
       specs.add(new LineSpec(prod.getId(), lineName, il.quantity(), il.unitPriceMinorUnits()));
     }
     return persistSaleFromLineSpecs(
@@ -137,7 +159,8 @@ public class SaleService {
         discountAmount,
         null,
         note,
-        specs);
+        specs,
+        null);
   }
 
   private void validateSubscriptionForSale(UUID businessId, String paymentMethod) {
@@ -163,8 +186,8 @@ public class SaleService {
   }
 
   /**
-   * Wave / Orange Money / crédit — sans contrôle du quota mensuel de ventes
-   * (réservé aux mises à jour).
+   * Wave / Orange Money / crédit — sans contrôle du quota mensuel de ventes (réservé aux mises à
+   * jour).
    */
   private void validatePlanPaymentMethodsOnly(UUID businessId, String paymentMethod) {
     subscriptionService
@@ -192,7 +215,8 @@ public class SaleService {
       int discountAmount,
       Integer amountReceived,
       String note,
-      List<LineSpec> lineSpecs) {
+      List<LineSpec> lineSpecs,
+      String clientSaleId) {
     Sale sale = new Sale();
     sale.setBusinessId(businessId);
     sale.setStoreId(storeId);
@@ -201,6 +225,7 @@ public class SaleService {
     sale.setPaymentMethod(paymentMethod);
     sale.setDiscountAmount(discountAmount);
     sale.setNote(note);
+    sale.setClientSaleId(clientSaleId);
     sale.setReceiptNumber(generateReceiptNumber());
     sale.setStatus("completed");
     sale.setSubtotal(0);
@@ -209,8 +234,9 @@ public class SaleService {
 
     int subtotal = 0;
     for (LineSpec line : lineSpecs) {
-      SaleLine saleLine = SaleLine.create(
-          sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
+      SaleLine saleLine =
+          SaleLine.create(
+              sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
       lineRepo.save(saleLine);
       subtotal += saleLine.getLineTotal();
       stockService.updateStockForSale(
@@ -227,9 +253,10 @@ public class SaleService {
       sale.setChangeGiven(Math.max(0, amountReceived - sale.getTotal()));
     }
     if (sale.isCreditSale()) {
-      Client c = clientRepo
-          .findByBusinessIdAndId(businessId, clientId)
-          .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+      Client c =
+          clientRepo
+              .findByBusinessIdAndId(businessId, clientId)
+              .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
       ClientCreditPolicy.requireNamedClientForCredit(paymentMethod, c);
       c.addCredit(sale.getTotal());
       clientRepo.save(c);
@@ -238,15 +265,15 @@ public class SaleService {
     return mapSale(sale);
   }
 
-  private record LineSpec(UUID productId, String lineName, int quantity, int unitPrice) {
-  }
+  private record LineSpec(UUID productId, String lineName, int quantity, int unitPrice) {}
 
   public SaleResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_READ);
-    Sale sale = saleRepo
-        .findByBusinessIdAndId(p.businessId(), id)
-        .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
+    Sale sale =
+        saleRepo
+            .findByBusinessIdAndId(p.businessId(), id)
+            .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
     if (subscriptionService.isBeforeDataRetention(p.businessId(), sale.getCreatedAt())) {
       throw new ResourceNotFoundException("Sale", id);
     }
@@ -268,18 +295,18 @@ public class SaleService {
   }
 
   /**
-   * Met à jour une vente validée (lignes, remise, paiement, note). Le numéro de
-   * reçu est conservé.
-   * Ajuste le stock et le solde crédit client comme pour une annulation suivie
-   * d'une nouvelle vente.
+   * Met à jour une vente validée (lignes, remise, paiement, note). Le numéro de reçu est conservé.
+   * Ajuste le stock et le solde crédit client comme pour une annulation suivie d'une nouvelle
+   * vente.
    */
   @Transactional
   public SaleResponse updateSale(UUID id, SaleRequest req, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_UPDATE);
-    Sale sale = saleRepo
-        .findByBusinessIdAndId(p.businessId(), id)
-        .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
+    Sale sale =
+        saleRepo
+            .findByBusinessIdAndId(p.businessId(), id)
+            .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
     if (subscriptionService.isBeforeDataRetention(p.businessId(), sale.getCreatedAt())) {
       throw new BusinessRuleException(
           "Cette vente est hors de la période d'historique de votre plan.");
@@ -294,8 +321,7 @@ public class SaleService {
         .findById(req.storeId())
         .filter(s -> s.belongsTo(p.businessId()))
         .orElseThrow(() -> new ResourceNotFoundException("Store", req.storeId()));
-    UUID clientId = requireClientForPosSale(
-        req.clientId(), p.businessId(), req.paymentMethod());
+    UUID clientId = requireClientForPosSale(req.clientId(), p.businessId(), req.paymentMethod());
     validatePlanPaymentMethodsOnly(p.businessId(), req.paymentMethod());
 
     List<SaleLine> oldLines = lineRepo.findBySaleId(sale.getId());
@@ -309,9 +335,10 @@ public class SaleService {
     }
     if (sale.isCreditSale()) {
       Sale finalSale = sale;
-      Client oldClient = clientRepo
-          .findByBusinessIdAndId(p.businessId(), sale.getClientId())
-          .orElseThrow(() -> new ResourceNotFoundException("Client", finalSale.getClientId()));
+      Client oldClient =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), sale.getClientId())
+              .orElseThrow(() -> new ResourceNotFoundException("Client", finalSale.getClientId()));
       oldClient.deductCredit(sale.getTotal());
       clientRepo.save(oldClient);
     }
@@ -320,9 +347,10 @@ public class SaleService {
 
     List<LineSpec> specs = new ArrayList<>();
     for (SaleLineRequest lr : req.lines()) {
-      Product prod = productRepo
-          .findByBusinessIdAndId(p.businessId(), lr.productId())
-          .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(p.businessId(), lr.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
       Integer salePv = prod.getSalePrice();
       if (salePv == null || salePv <= 0) {
         throw new BusinessRuleException(
@@ -333,8 +361,9 @@ public class SaleService {
 
     int subtotal = 0;
     for (LineSpec line : specs) {
-      SaleLine saleLine = SaleLine.create(
-          sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
+      SaleLine saleLine =
+          SaleLine.create(
+              sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
       lineRepo.save(saleLine);
       subtotal += saleLine.getLineTotal();
       stockService.updateStockForSale(
@@ -366,9 +395,10 @@ public class SaleService {
     }
 
     if (sale.isCreditSale()) {
-      Client c = clientRepo
-          .findByBusinessIdAndId(p.businessId(), clientId)
-          .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+      Client c =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), clientId)
+              .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
       ClientCreditPolicy.requireNamedClientForCredit(req.paymentMethod(), c);
       c.addCredit(newTotal);
       clientRepo.save(c);
@@ -378,14 +408,14 @@ public class SaleService {
     return mapSale(sale);
   }
 
-  private UUID requireClientForPosSale(
-      UUID clientId, UUID businessId, String paymentMethod) {
+  private UUID requireClientForPosSale(UUID clientId, UUID businessId, String paymentMethod) {
     if (clientId == null) {
       throw new BusinessRuleException("Client obligatoire pour cette vente.");
     }
-    Client client = clientRepo
-        .findByBusinessIdAndId(businessId, clientId)
-        .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+    Client client =
+        clientRepo
+            .findByBusinessIdAndId(businessId, clientId)
+            .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
     ClientCreditPolicy.requireNamedClientForCredit(paymentMethod, client);
     return clientId;
   }
@@ -394,15 +424,15 @@ public class SaleService {
   public SaleResponse voidSale(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SALES_DELETE);
-    Sale sale = saleRepo
-        .findByBusinessIdAndId(p.businessId(), id)
-        .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
+    Sale sale =
+        saleRepo
+            .findByBusinessIdAndId(p.businessId(), id)
+            .orElseThrow(() -> new ResourceNotFoundException("Sale", id));
     if (subscriptionService.isBeforeDataRetention(p.businessId(), sale.getCreatedAt())) {
       throw new BusinessRuleException(
           "Cette vente est hors de la période d'historique de votre plan.");
     }
-    if (!sale.isCompleted())
-      throw new BusinessRuleException("Only completed sales can be voided");
+    if (!sale.isCompleted()) throw new BusinessRuleException("Only completed sales can be voided");
     sale.markVoided();
     List<SaleLine> lines = lineRepo.findBySaleId(sale.getId());
     for (SaleLine line : lines)
@@ -413,9 +443,10 @@ public class SaleService {
           line.getQuantity(),
           "VOID-" + sale.getReceiptNumber());
     if (sale.isCreditSale()) {
-      Client c = clientRepo
-          .findByBusinessIdAndId(p.businessId(), sale.getClientId())
-          .orElseThrow(() -> new ResourceNotFoundException("Client", sale.getClientId()));
+      Client c =
+          clientRepo
+              .findByBusinessIdAndId(p.businessId(), sale.getClientId())
+              .orElseThrow(() -> new ResourceNotFoundException("Client", sale.getClientId()));
       c.deductCredit(sale.getTotal());
       clientRepo.save(c);
     }
@@ -423,9 +454,10 @@ public class SaleService {
   }
 
   private String generateReceiptNumber() {
-    String prefix = "RCP-"
-        + DateTimeFormatter.ofPattern("yyyyMMdd")
-            .format(Instant.now().atZone(ZoneId.systemDefault()));
+    String prefix =
+        "RCP-"
+            + DateTimeFormatter.ofPattern("yyyyMMdd")
+                .format(Instant.now().atZone(ZoneId.systemDefault()));
     String num;
     do {
       num = prefix + "-" + String.format("%04d", (int) (Math.random() * 10000));
@@ -434,16 +466,18 @@ public class SaleService {
   }
 
   private SaleResponse mapSale(Sale s) {
-    List<SaleLineResponse> lines = lineRepo.findBySaleId(s.getId()).stream()
-        .map(
-            l -> new SaleLineResponse(
-                l.getId(),
-                l.getProductId(),
-                l.getProductName(),
-                l.getQuantity(),
-                l.getUnitPrice(),
-                l.getLineTotal()))
-        .toList();
+    List<SaleLineResponse> lines =
+        lineRepo.findBySaleId(s.getId()).stream()
+            .map(
+                l ->
+                    new SaleLineResponse(
+                        l.getId(),
+                        l.getProductId(),
+                        l.getProductName(),
+                        l.getQuantity(),
+                        l.getUnitPrice(),
+                        l.getLineTotal()))
+            .toList();
     var store = storeRepo.findById(s.getStoreId()).orElse(null);
     String storeName = store != null ? store.getName() : "Boutique";
     String storeAddress = store != null ? store.getAddress() : null;
@@ -469,7 +503,6 @@ public class SaleService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 }

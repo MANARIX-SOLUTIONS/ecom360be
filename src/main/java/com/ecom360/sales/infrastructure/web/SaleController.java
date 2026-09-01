@@ -32,7 +32,7 @@ public class SaleController {
   }
 
   @PostMapping
-  @Operation(summary = "Create sale")
+  @Operation(summary = "Create sale (idempotent if clientSaleId is replayed)")
   public ResponseEntity<SaleResponse> create(
       @Valid @RequestBody SaleRequest r, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.status(201).body(svc.createSale(r, p));

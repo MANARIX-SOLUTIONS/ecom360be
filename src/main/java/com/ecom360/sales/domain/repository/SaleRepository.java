@@ -20,6 +20,8 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
 
         Optional<Sale> findByBusinessIdAndId(UUID bId, UUID id);
 
+        Optional<Sale> findByBusinessIdAndClientSaleId(UUID businessId, String clientSaleId);
+
         boolean existsByReceiptNumber(String r);
 
         long countByBusinessIdAndCreatedAtBetween(UUID bId, Instant s, Instant e);

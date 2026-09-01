@@ -50,6 +50,9 @@ public class Sale {
   @Column(columnDefinition = "TEXT")
   private String note;
 
+  @Column(name = "client_sale_id", length = 64)
+  private String clientSaleId;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -180,6 +183,14 @@ public class Sale {
 
   public void setNote(String v) {
     this.note = v;
+  }
+
+  public String getClientSaleId() {
+    return clientSaleId;
+  }
+
+  public void setClientSaleId(String v) {
+    this.clientSaleId = v;
   }
 
   public Instant getCreatedAt() {

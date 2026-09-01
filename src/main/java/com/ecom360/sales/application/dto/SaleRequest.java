@@ -1,5 +1,6 @@
 package com.ecom360.sales.application.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.util.List;
@@ -12,7 +13,9 @@ public record SaleRequest(
     @Min(0) Integer discountAmount,
     @Min(0) Integer amountReceived,
     String note,
-    @NotEmpty @Valid List<SaleLineRequest> lines) {
+    @NotEmpty @Valid List<SaleLineRequest> lines,
+    @Schema(description = "Idempotence POS / outbox offline — unique par business")
+        UUID clientSaleId) {
   public SaleRequest {
     if (discountAmount == null)
       discountAmount = 0;

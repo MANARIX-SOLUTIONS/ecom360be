@@ -188,8 +188,7 @@ public class StockService {
             });
     int before = s.getQuantity();
     if (before - qty < 0) {
-      throw new BusinessRuleException(
-          "Stock insuffisant pour ce produit (disponible: " + before + ", demandé: " + qty + ")");
+      throw InsufficientStockException.forSale(before, qty);
     }
     s.adjustQuantity(-qty);
     stockRepo.save(s);

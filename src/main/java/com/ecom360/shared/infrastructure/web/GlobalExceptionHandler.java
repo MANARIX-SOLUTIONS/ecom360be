@@ -39,6 +39,16 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(d);
   }
 
+  @ExceptionHandler(InsufficientStockException.class)
+  public ResponseEntity<ProblemDetail> handleInsufficientStock(InsufficientStockException ex) {
+    log.debug("Insufficient stock: {}", ex.getMessage());
+    ProblemDetail d = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    d.setTitle("Insufficient Stock");
+    d.setProperty("code", InsufficientStockException.CODE);
+    d.setProperty("timestamp", Instant.now());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(d);
+  }
+
   @ExceptionHandler(BusinessRuleException.class)
   public ResponseEntity<ProblemDetail> handleBusinessRule(BusinessRuleException ex) {
     log.debug("Business rule violation: {}", ex.getMessage());
