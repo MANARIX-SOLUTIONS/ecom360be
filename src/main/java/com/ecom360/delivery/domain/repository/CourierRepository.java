@@ -17,4 +17,6 @@ public interface CourierRepository extends JpaRepository<Courier, UUID> {
   Optional<Courier> findByBusinessIdAndId(UUID businessId, UUID id);
 
   boolean existsByBusinessIdAndNameIgnoreCase(UUID businessId, String name);
+
+  boolean existsByBusinessIdAndNameIgnoreCaseAndIdNot(UUID businessId, String name, UUID id);
 }

@@ -98,24 +98,45 @@ public class ProductService {
     return map(find(id, p));
   }
 
-  public Page<ProductResponse> list(UserPrincipal p, Pageable pg, String search, UUID storeId) {
+  public Page<ProductResponse> list(
+      UserPrincipal p,
+      Pageable pg,
+      String search,
+      UUID storeId,
+      UUID categoryId,
+      Boolean isActive) {
     requireBiz(p);
     permissionService.require(p, Permission.PRODUCTS_READ);
+    boolean active = isActive == null || isActive;
+    String q = search != null ? search.trim() : "";
     Page<Product> page;
     if (storeId != null) {
-      Store store = storeRepository
-          .findById(storeId)
-          .filter(s -> s.belongsTo(p.businessId()))
-          .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
-      page = (search != null && !search.isBlank())
-          ? productRepo.searchByBusinessIdAndStoreId(
-              p.businessId(), store.getId(), search.trim(), pg)
-          : productRepo.findByBusinessIdAndStoreIdAndIsActive(
-              p.businessId(), store.getId(), true, pg);
+      Store store =
+          storeRepository
+              .findById(storeId)
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+      if (!q.isEmpty()) {
+        page =
+            productRepo.searchByBusinessIdAndStoreId(
+                p.businessId(), store.getId(), q, categoryId, active, pg);
+      } else if (categoryId != null) {
+        page =
+            productRepo.findByBusinessIdAndStoreIdAndCategoryIdAndIsActive(
+                p.businessId(), store.getId(), categoryId, active, pg);
+      } else {
+        page =
+            productRepo.findByBusinessIdAndStoreIdAndIsActive(
+                p.businessId(), store.getId(), active, pg);
+      }
+    } else if (!q.isEmpty()) {
+      page = productRepo.searchByBusinessId(p.businessId(), q, categoryId, active, pg);
+    } else if (categoryId != null) {
+      page =
+          productRepo.findByBusinessIdAndCategoryIdAndIsActive(
+              p.businessId(), categoryId, active, pg);
     } else {
-      page = (search != null && !search.isBlank())
-          ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
-          : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
+      page = productRepo.findByBusinessIdAndIsActive(p.businessId(), active, pg);
     }
     return page.map(this::map);
   }

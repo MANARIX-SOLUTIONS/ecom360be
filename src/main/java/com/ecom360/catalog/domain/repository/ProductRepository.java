@@ -33,9 +33,25 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
   Optional<Product> findByBusinessIdAndStoreIdAndSkuNormalized(
       @Param("bid") UUID businessId, @Param("sid") UUID storeId, @Param("sku") String sku);
 
+  Page<Product> findByBusinessIdAndCategoryIdAndIsActive(
+      UUID businessId, UUID categoryId, Boolean isActive, Pageable pageable);
+
   @Query(
-      "SELECT p FROM Product p WHERE p.businessId = :bid AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))")
-  Page<Product> searchByBusinessId(@Param("bid") UUID bid, @Param("s") String s, Pageable pageable);
+      """
+      SELECT p FROM Product p
+      WHERE p.businessId = :bid
+        AND p.isActive = :active
+        AND (:cat IS NULL OR p.categoryId = :cat)
+        AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%'))
+          OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%'))
+          OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))
+      """)
+  Page<Product> searchByBusinessId(
+      @Param("bid") UUID bid,
+      @Param("s") String s,
+      @Param("cat") UUID categoryId,
+      @Param("active") Boolean active,
+      Pageable pageable);
 
   long countByBusinessIdAndCategoryId(UUID businessId, UUID categoryId);
 
@@ -45,8 +61,24 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
   Page<Product> findByBusinessIdAndStoreIdAndIsActive(
       UUID businessId, UUID storeId, Boolean isActive, Pageable pageable);
 
+  Page<Product> findByBusinessIdAndStoreIdAndCategoryIdAndIsActive(
+      UUID businessId, UUID storeId, UUID categoryId, Boolean isActive, Pageable pageable);
+
   @Query(
-      "SELECT p FROM Product p WHERE p.businessId = :bid AND p.storeId = :sid AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%')) OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))")
+      """
+      SELECT p FROM Product p
+      WHERE p.businessId = :bid AND p.storeId = :sid
+        AND p.isActive = :active
+        AND (:cat IS NULL OR p.categoryId = :cat)
+        AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :s, '%'))
+          OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :s, '%'))
+          OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :s, '%')))
+      """)
   Page<Product> searchByBusinessIdAndStoreId(
-      @Param("bid") UUID bid, @Param("sid") UUID storeId, @Param("s") String s, Pageable pageable);
+      @Param("bid") UUID bid,
+      @Param("sid") UUID storeId,
+      @Param("s") String s,
+      @Param("cat") UUID categoryId,
+      @Param("active") Boolean active,
+      Pageable pageable);
 }

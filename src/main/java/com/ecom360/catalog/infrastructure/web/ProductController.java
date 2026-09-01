@@ -52,6 +52,8 @@ public class ProductController {
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) UUID storeId,
+      @RequestParam(required = false) UUID categoryId,
+      @RequestParam(required = false) Boolean isActive,
       @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(
         PageResponse.of(
@@ -62,7 +64,9 @@ public class ProductController {
                     Math.min(size, ApiConstants.MAX_PAGE_SIZE),
                     Sort.by("createdAt").descending()),
                 search,
-                storeId)));
+                storeId,
+                categoryId,
+                isActive)));
   }
 
   @PutMapping("/{id}")

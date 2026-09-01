@@ -20,6 +20,8 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
 
   Optional<Delivery> findByBusinessIdAndId(UUID businessId, UUID id);
 
+  boolean existsByBusinessIdAndCourierId(UUID businessId, UUID courierId);
+
   @Query(
       "SELECT COALESCE(SUM(d.parcelsCount), 0) FROM Delivery d WHERE d.courierId = :courierId"
           + " AND d.businessId = :businessId AND d.status = 'delivered'")
@@ -46,9 +48,14 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
 
   /** Stats agrégées par livreur (courier_id, total_parcels, delivered_count, failed_count). */
   @Query(
-      "SELECT d.courierId, COALESCE(SUM(CASE WHEN d.status = 'delivered' THEN d.parcelsCount ELSE 0 END), 0),"
-          + " COUNT(CASE WHEN d.status = 'delivered' THEN 1 END),"
-          + " COUNT(CASE WHEN d.status = 'failed' THEN 1 END) FROM Delivery d"
-          + " WHERE d.businessId = :businessId GROUP BY d.courierId")
-  List<Object[]> findDeliveryStatsByBusinessId(@Param("businessId") UUID businessId);
+      """
+      SELECT d.courierId AS courierId,
+             COALESCE(SUM(CASE WHEN d.status = 'delivered' THEN d.parcelsCount ELSE 0 END), 0) AS totalParcels,
+             COUNT(CASE WHEN d.status = 'delivered' THEN 1 END) AS deliveredCount,
+             COUNT(CASE WHEN d.status = 'failed' THEN 1 END) AS failedCount
+      FROM Delivery d
+      WHERE d.businessId = :businessId
+      GROUP BY d.courierId
+      """)
+  List<CourierDeliveryStatsRow> findDeliveryStatsByBusinessId(@Param("businessId") UUID businessId);
 }
