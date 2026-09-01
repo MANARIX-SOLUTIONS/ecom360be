@@ -5,6 +5,7 @@ import com.ecom360.shared.infrastructure.web.ApiConstants;
 import com.ecom360.tenant.application.dto.BusinessLogoRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileResponse;
+import com.ecom360.tenant.application.dto.BusinessThemeRequest;
 import com.ecom360.tenant.application.service.BusinessProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -53,5 +54,12 @@ public class BusinessController {
   public ResponseEntity<BusinessProfileResponse> uploadLogo(
       @RequestPart("file") MultipartFile file, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(businessProfileService.uploadLogo(file, p));
+  }
+
+  @PatchMapping("/me/theme")
+  @Operation(summary = "Mettre à jour le thème (plan Business si couleurs non vides)")
+  public ResponseEntity<BusinessProfileResponse> updateTheme(
+      @Valid @RequestBody BusinessThemeRequest req, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(businessProfileService.updateTheme(req, p));
   }
 }

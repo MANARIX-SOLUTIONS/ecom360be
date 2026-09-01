@@ -23,6 +23,12 @@ public class Business extends AggregateRoot {
   @Column(name = "logo_url")
   private String logoUrl;
 
+  @Column(name = "theme_primary_color", length = 7)
+  private String themePrimaryColor;
+
+  @Column(name = "theme_accent_color", length = 7)
+  private String themeAccentColor;
+
   @Column(name = "tax_id")
   private String taxId;
 
@@ -103,6 +109,22 @@ public class Business extends AggregateRoot {
 
   public void setLogoUrl(String logoUrl) {
     this.logoUrl = logoUrl;
+  }
+
+  public String getThemePrimaryColor() {
+    return themePrimaryColor;
+  }
+
+  public void setThemePrimaryColor(String themePrimaryColor) {
+    this.themePrimaryColor = themePrimaryColor;
+  }
+
+  public String getThemeAccentColor() {
+    return themeAccentColor;
+  }
+
+  public void setThemeAccentColor(String themeAccentColor) {
+    this.themeAccentColor = themeAccentColor;
   }
 
   public String getTaxId() {

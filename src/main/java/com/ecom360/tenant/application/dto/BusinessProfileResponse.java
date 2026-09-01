@@ -10,4 +10,6 @@ public record BusinessProfileResponse(
     String phone,
     String address,
     String logoUrl,
+    String themePrimaryColor,
+    String themeAccentColor,
     Instant createdAt) {}
