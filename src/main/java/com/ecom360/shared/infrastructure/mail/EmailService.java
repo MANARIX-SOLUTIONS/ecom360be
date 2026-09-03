@@ -285,6 +285,109 @@ public class EmailService {
     send(to, subject, plain, mailTemplates.render("mail/subscription-reminder", ctx));
   }
 
+  public void sendSubscriptionExpiredEmail(
+      String to, String fullName, boolean wasTrialing, String subscriptionUrl) {
+    String subject =
+        wasTrialing
+            ? "360 PME Commerce | Votre essai est terminé"
+            : "360 PME Commerce | Votre abonnement a expiré";
+    String heading =
+        wasTrialing ? "Votre essai est terminé" : "Votre abonnement a expiré";
+    String detailLine =
+        wasTrialing
+            ? "Choisissez un plan pour retrouver l’accès à 360 PME Commerce."
+            : "Renouvelez votre abonnement pour continuer sans interruption.";
+    String plain =
+        """
+        Bonjour %s,
+
+        %s
+        %s
+
+        %s
+
+        Cordialement,
+        L’équipe 360 PME Commerce
+        """
+            .formatted(fullName, heading, detailLine, subscriptionUrl);
+
+    Context ctx = mailContext(subject);
+    ctx.setVariable("heading", heading);
+    ctx.setVariable("greetingLine", "Bonjour " + fullName + ",");
+    ctx.setVariable("detailLine", detailLine);
+    ctx.setVariable("subscriptionUrl", subscriptionUrl);
+    ctx.setVariable("ctaLabel", "Choisir ou renouveler un plan");
+    send(to, subject, plain, mailTemplates.render("mail/subscription-reminder", ctx));
+  }
+
+  public void sendSubscriptionCheckoutPaidEmail(
+      String to,
+      String fullName,
+      String planName,
+      String cycleLabel,
+      String periodEndFormattedFr,
+      String subscriptionUrl) {
+    String subject = "360 PME Commerce | Abonnement activé — " + planName;
+    String detailLine =
+        "Le plan "
+            + planName
+            + " ("
+            + cycleLabel
+            + ") est actif jusqu’au "
+            + periodEndFormattedFr
+            + ".";
+    String plain =
+        """
+        Bonjour %s,
+
+        Votre abonnement est activé.
+        %s
+
+        %s
+
+        Cordialement,
+        L’équipe 360 PME Commerce
+        """
+            .formatted(fullName, detailLine, subscriptionUrl);
+
+    Context ctx = mailContext(subject);
+    ctx.setVariable("heading", "Abonnement activé");
+    ctx.setVariable("greetingLine", "Bonjour " + fullName + ",");
+    ctx.setVariable("detailLine", detailLine);
+    ctx.setVariable("subscriptionUrl", subscriptionUrl);
+    ctx.setVariable("ctaLabel", "Voir mon abonnement");
+    send(to, subject, plain, mailTemplates.render("mail/subscription-reminder", ctx));
+  }
+
+  public void sendSubscriptionCheckoutFailedEmail(
+      String to, String fullName, String reason, String subscriptionUrl) {
+    String subject = "360 PME Commerce | Paiement d’abonnement échoué";
+    String detailLine =
+        reason != null && !reason.isBlank()
+            ? reason.strip()
+            : "Le paiement n’a pas abouti. Réessayez depuis Réglages → Abonnement.";
+    String plain =
+        """
+        Bonjour %s,
+
+        %s
+
+        %s
+
+        Cordialement,
+        L’équipe 360 PME Commerce
+        """
+            .formatted(fullName, detailLine, subscriptionUrl);
+
+    Context ctx = mailContext(subject);
+    ctx.setVariable("heading", "Paiement échoué");
+    ctx.setVariable("greetingLine", "Bonjour " + fullName + ",");
+    ctx.setVariable("detailLine", detailLine);
+    ctx.setVariable("subscriptionUrl", subscriptionUrl);
+    ctx.setVariable("ctaLabel", "Réessayer le paiement");
+    send(to, subject, plain, mailTemplates.render("mail/subscription-reminder", ctx));
+  }
+
   public void sendWelcomeAfterSignupEmail(
       String to,
       String fullName,
