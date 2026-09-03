@@ -5,6 +5,13 @@
 # ──────────────────────────────────────────────────────────────
 
 spring:
+  # évite les cron pendant les tests d’intégration
+  task:
+    scheduling:
+      enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mail.MailAutoConfiguration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/neondb}
     username: ${DB_USERNAME:}

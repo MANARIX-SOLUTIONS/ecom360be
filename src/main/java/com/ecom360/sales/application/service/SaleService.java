@@ -9,6 +9,8 @@ import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.service.StockService;
+import com.ecom360.notification.application.service.NotificationPublisher;
+import com.ecom360.notification.application.service.NotificationTypes;
 import com.ecom360.sales.application.dto.*;
 import com.ecom360.sales.domain.SalePaymentPolicy;
 import com.ecom360.sales.domain.model.*;
@@ -40,6 +42,7 @@ public class SaleService {
   private final StockService stockService;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
+  private final NotificationPublisher notificationPublisher;
 
   public SaleService(
       SaleRepository saleRepo,
@@ -50,7 +53,8 @@ public class SaleService {
       ClientRepository clientRepo,
       StockService stockService,
       SubscriptionService subscriptionService,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      NotificationPublisher notificationPublisher) {
     this.saleRepo = saleRepo;
     this.lineRepo = lineRepo;
     this.salePaymentRepo = salePaymentRepo;
@@ -60,6 +64,7 @@ public class SaleService {
     this.stockService = stockService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
+    this.notificationPublisher = notificationPublisher;
   }
 
   @Transactional
@@ -267,6 +272,7 @@ public class SaleService {
           SalePayment.record(
               sale, userId, amountPaid, paymentMethod, SalePaymentKind.DEPOSIT, null));
     }
+    notifyDigitalPaymentReceived(sale);
     return mapSale(sale);
   }
 
@@ -328,7 +334,8 @@ public class SaleService {
    * Met à jour une vente validée (lignes, remise, paiement, note). Le numéro de
    * reçu est conservé.
    * Ajuste le stock et le solde crédit client comme pour une annulation suivie
-   * d'une nouvelle vente.
+   * d'une nouvelle
+   * vente.
    */
   @Transactional
   public SaleResponse updateSale(UUID id, SaleRequest req, UserPrincipal p) {
@@ -627,5 +634,27 @@ public class SaleService {
   private void requireBiz(UserPrincipal p) {
     if (!p.hasBusinessAccess())
       throw new AccessDeniedException("Business context required");
+  }
+
+  /**
+   * In-app only, P / G. Hook for T1-04 {@code confirmPaid} when the sale
+   * becomes {@code completed} after a Wave / OM intent.
+   */
+  void notifyDigitalPaymentReceived(Sale sale) {
+    if (sale == null || !sale.isCompleted()) {
+      return;
+    }
+    String method = sale.getPaymentMethod();
+    if (!"wave".equals(method) && !"orange_money".equals(method)) {
+      return;
+    }
+    String label = "wave".equals(method) ? "Wave" : "Orange Money";
+    Integer total = sale.getTotal() != null ? sale.getTotal() : 0;
+    notificationPublisher.notifyOwnersAndManagers(
+        sale.getBusinessId(),
+        NotificationTypes.PAYMENT_RECEIVED,
+        "Paiement " + label + " reçu",
+        total + " FCFA — reçu " + sale.getReceiptNumber() + ".",
+        "/sales?saleId=" + sale.getId());
   }
 }

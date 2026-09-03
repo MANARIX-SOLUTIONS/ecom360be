@@ -8,6 +8,8 @@ import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.sales.application.service.SalePaymentAllocationService;
+import com.ecom360.notification.application.service.NotificationPublisher;
+import com.ecom360.notification.application.service.NotificationTypes;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.UUID;
@@ -24,18 +26,21 @@ public class ClientService {
   private final SalePaymentAllocationService allocationService;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
+  private final NotificationPublisher notificationPublisher;
 
   public ClientService(
       ClientRepository clientRepo,
       ClientPaymentRepository paymentRepo,
       SalePaymentAllocationService allocationService,
       SubscriptionService subscriptionService,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      NotificationPublisher notificationPublisher) {
     this.clientRepo = clientRepo;
     this.paymentRepo = paymentRepo;
     this.allocationService = allocationService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
+    this.notificationPublisher = notificationPublisher;
   }
 
   public ClientResponse create(ClientRequest r, UserPrincipal p) {
@@ -131,6 +136,17 @@ public class ClientService {
         r.paymentMethod(),
         pay.getId(),
         r.note());
+    notificationPublisher.notifyBusiness(
+        p.businessId(),
+        NotificationTypes.PAYMENT_RECEIVED,
+        "Paiement crédit reçu",
+        pay.getAmount()
+            + " FCFA reçus de "
+            + c.getName()
+            + ".",
+        "/clients/" + clientId,
+        Permission.CLIENTS_READ,
+        Permission.SALES_READ);
     return new ClientPaymentResponse(
         pay.getId(),
         pay.getClientId(),
