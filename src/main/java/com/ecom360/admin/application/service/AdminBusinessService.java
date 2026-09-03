@@ -15,6 +15,7 @@ import com.ecom360.shared.domain.exception.ResourceAlreadyExistsException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.store.domain.repository.StoreRepository;
 import com.ecom360.tenant.application.service.BusinessRoleBootstrapService;
+import com.ecom360.tenant.application.service.SubscriptionCheckoutNotificationService;
 import com.ecom360.tenant.application.service.SubscriptionService;
 import com.ecom360.tenant.application.service.TenantWelcomeNotificationService;
 import com.ecom360.tenant.domain.model.Business;
@@ -60,6 +61,7 @@ public class AdminBusinessService {
   private final BusinessRoleBootstrapService businessRoleBootstrapService;
   private final BusinessRoleRepository businessRoleRepository;
   private final TenantWelcomeNotificationService tenantWelcomeNotificationService;
+  private final SubscriptionCheckoutNotificationService checkoutNotificationService;
 
   public AdminBusinessService(
       BusinessRepository businessRepository,
@@ -72,7 +74,8 @@ public class AdminBusinessService {
       SubscriptionService subscriptionService,
       BusinessRoleBootstrapService businessRoleBootstrapService,
       BusinessRoleRepository businessRoleRepository,
-      TenantWelcomeNotificationService tenantWelcomeNotificationService) {
+      TenantWelcomeNotificationService tenantWelcomeNotificationService,
+      SubscriptionCheckoutNotificationService checkoutNotificationService) {
     this.businessRepository = businessRepository;
     this.businessUserRepository = businessUserRepository;
     this.userRepository = userRepository;
@@ -84,6 +87,7 @@ public class AdminBusinessService {
     this.businessRoleBootstrapService = businessRoleBootstrapService;
     this.businessRoleRepository = businessRoleRepository;
     this.tenantWelcomeNotificationService = tenantWelcomeNotificationService;
+    this.checkoutNotificationService = checkoutNotificationService;
   }
 
   public Page<AdminBusinessResponse> list(
@@ -92,10 +96,9 @@ public class AdminBusinessService {
     Pageable pageable = PageRequest.of(page, pageSize);
     String q = (search != null && !search.isBlank()) ? search.trim() : null;
     String st = (status != null && !status.isBlank()) ? status.trim() : null;
-    String plan =
-        (planSlug != null && !planSlug.isBlank() && !"all".equalsIgnoreCase(planSlug))
-            ? planSlug.trim()
-            : null;
+    String plan = (planSlug != null && !planSlug.isBlank() && !"all".equalsIgnoreCase(planSlug))
+        ? planSlug.trim()
+        : null;
 
     Page<Business> businesses;
     if (q == null && st == null && plan == null) {
@@ -108,8 +111,7 @@ public class AdminBusinessService {
     Map<UUID, String> ownerMap = loadOwners(bizIds);
     Map<UUID, Subscription> latestSubs = loadLatestSubscriptions(bizIds);
     Map<UUID, String> planMap = buildPlanNamesForBusinesses(bizIds, latestSubs);
-    Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap =
-        buildSubscriptionInfos(latestSubs);
+    Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap = buildSubscriptionInfos(latestSubs);
     Map<UUID, Integer> storesMap = loadStoresCount(bizIds);
     Map<UUID, Long> revenueMap = loadMonthlyRevenue(bizIds);
 
@@ -118,16 +120,14 @@ public class AdminBusinessService {
   }
 
   public AdminBusinessResponse getById(UUID businessId, UserPrincipal p) {
-    Business b =
-        businessRepository
-            .findById(businessId)
-            .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    Business b = businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     List<UUID> bizIds = List.of(b.getId());
     Map<UUID, String> ownerMap = loadOwners(bizIds);
     Map<UUID, Subscription> latestSubs = loadLatestSubscriptions(bizIds);
     Map<UUID, String> planMap = buildPlanNamesForBusinesses(bizIds, latestSubs);
-    Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap =
-        buildSubscriptionInfos(latestSubs);
+    Map<UUID, AdminBusinessSubscriptionInfo> subscriptionInfoMap = buildSubscriptionInfos(latestSubs);
     Map<UUID, Integer> storesMap = loadStoresCount(bizIds);
     Map<UUID, Long> revenueMap = loadMonthlyRevenue(bizIds);
     return map(b, ownerMap, planMap, subscriptionInfoMap, storesMap, revenueMap);
@@ -149,20 +149,17 @@ public class AdminBusinessService {
 
     businessRoleBootstrapService.ensureDefaultRolesForBusiness(b.getId());
     if (req.ownerUserId() != null) {
-      User owner =
-          userRepository
-              .findById(req.ownerUserId())
-              .orElseThrow(() -> new ResourceNotFoundException("User", req.ownerUserId()));
-      BusinessRole admin =
-          businessRoleRepository
-              .findByBusinessIdAndCode(b.getId(), "PROPRIETAIRE")
-              .orElseThrow(() -> new IllegalStateException("Default PROPRIETAIRE role missing"));
+      User owner = userRepository
+          .findById(req.ownerUserId())
+          .orElseThrow(() -> new ResourceNotFoundException("User", req.ownerUserId()));
+      BusinessRole admin = businessRoleRepository
+          .findByBusinessIdAndCode(b.getId(), "PROPRIETAIRE")
+          .orElseThrow(() -> new IllegalStateException("Default PROPRIETAIRE role missing"));
       BusinessUser bu = BusinessUser.create(b.getId(), owner.getId(), admin);
       businessUserRepository.save(bu);
     }
 
-    String plan =
-        (req.planSlug() != null && !req.planSlug().isBlank()) ? req.planSlug().trim() : null;
+    String plan = (req.planSlug() != null && !req.planSlug().isBlank()) ? req.planSlug().trim() : null;
     if (plan == null || "trial".equalsIgnoreCase(plan)) {
       subscriptionService.createTrialForNewBusiness(b.getId());
     } else {
@@ -179,10 +176,9 @@ public class AdminBusinessService {
   @Transactional
   public AdminBusinessResponse update(
       UUID businessId, AdminUpdateBusinessRequest req, UserPrincipal p) {
-    Business b =
-        businessRepository
-            .findById(businessId)
-            .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    Business b = businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     if (req.name() != null && !req.name().isBlank()) {
       b.setName(req.name());
     }
@@ -204,9 +200,12 @@ public class AdminBusinessService {
   }
 
   /**
-   * Renouvelle l'abonnement : une période supplémentaire (mensuelle ou annuelle). Si l'abonnement
-   * payant est encore actif, la nouvelle période commence à la fin de la période courante. Sinon
-   * (expiré, annulé, essai) la période commence aujourd'hui ; l'essai est converti en payant dès
+   * Renouvelle l'abonnement : une période supplémentaire (mensuelle ou annuelle).
+   * Si l'abonnement
+   * payant est encore actif, la nouvelle période commence à la fin de la période
+   * courante. Sinon
+   * (expiré, annulé, essai) la période commence aujourd'hui ; l'essai est
+   * converti en payant dès
    * aujourd'hui.
    */
   @Transactional
@@ -217,36 +216,31 @@ public class AdminBusinessService {
         .findById(businessId)
         .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
 
-    Subscription latest =
-        subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(businessId).orElse(null);
+    Subscription latest = subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(businessId).orElse(null);
 
     String planSlug;
     String billingCycleRaw;
     if (req != null && req.planSlug() != null && !req.planSlug().isBlank()) {
       planSlug = req.planSlug().trim();
-      billingCycleRaw =
-          req.billingCycle() != null && !req.billingCycle().isBlank()
-              ? req.billingCycle().trim()
-              : "monthly";
+      billingCycleRaw = req.billingCycle() != null && !req.billingCycle().isBlank()
+          ? req.billingCycle().trim()
+          : "monthly";
     } else if (latest != null) {
-      Plan lp =
-          planRepository
-              .findById(latest.getPlanId())
-              .orElseThrow(() -> new ResourceNotFoundException("Plan", latest.getPlanId()));
+      Plan lp = planRepository
+          .findById(latest.getPlanId())
+          .orElseThrow(() -> new ResourceNotFoundException("Plan", latest.getPlanId()));
       planSlug = lp.getSlug();
-      billingCycleRaw =
-          req != null && req.billingCycle() != null && !req.billingCycle().isBlank()
-              ? req.billingCycle().trim()
-              : latest.getBillingCycle();
+      billingCycleRaw = req != null && req.billingCycle() != null && !req.billingCycle().isBlank()
+          ? req.billingCycle().trim()
+          : latest.getBillingCycle();
     } else {
       throw new BusinessRuleException(
           "Aucun abonnement existant — précisez un plan ou utilisez « Changer le plan ».");
     }
 
-    Plan targetPlan =
-        planRepository
-            .findBySlug(planSlug)
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    Plan targetPlan = planRepository
+        .findBySlug(planSlug)
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
     if (!Boolean.TRUE.equals(targetPlan.getIsActive())) {
       throw new IllegalArgumentException("Plan is not active: " + planSlug);
     }
@@ -264,10 +258,9 @@ public class AdminBusinessService {
               + " magasin(s). Réduisez le nombre de boutiques ou choisissez un plan supérieur.");
     }
 
-    String cycle =
-        "yearly".equalsIgnoreCase(billingCycleRaw != null ? billingCycleRaw : "")
-            ? "yearly"
-            : "monthly";
+    String cycle = "yearly".equalsIgnoreCase(billingCycleRaw != null ? billingCycleRaw : "")
+        ? "yearly"
+        : "monthly";
     LocalDate today = LocalDate.now();
     LocalDate anchor;
     if (latest == null) {
@@ -305,22 +298,24 @@ public class AdminBusinessService {
               biz.setTrialUsedAt(Instant.now());
               businessRepository.save(biz);
             });
+
+    checkoutNotificationService.notifyPaid(
+        businessId, targetPlan.getName(), cycle, periodEnd);
   }
 
   /**
-   * Assign or change the plan for a business (platform admin). Creates or replaces active
+   * Assign or change the plan for a business (platform admin). Creates or
+   * replaces active
    * subscription.
    */
   @Transactional
   public void assignPlan(UUID businessId, String planSlug, String billingCycle, UserPrincipal p) {
-    Business b =
-        businessRepository
-            .findById(businessId)
-            .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
-    Plan targetPlan =
-        planRepository
-            .findBySlug(planSlug.trim())
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    Business b = businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    Plan targetPlan = planRepository
+        .findBySlug(planSlug.trim())
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
     if (!Boolean.TRUE.equals(targetPlan.getIsActive())) {
       throw new IllegalArgumentException("Plan is not active: " + planSlug);
     }
@@ -336,22 +331,19 @@ public class AdminBusinessService {
               + targetPlan.getMaxStores()
               + " magasin(s). Réduisez le nombre de boutiques ou choisissez un plan supérieur.");
     }
-    String cycle =
-        "yearly".equalsIgnoreCase(billingCycle != null ? billingCycle : "") ? "yearly" : "monthly";
+    String cycle = "yearly".equalsIgnoreCase(billingCycle != null ? billingCycle : "") ? "yearly" : "monthly";
     createActiveSubscriptionForBusiness(b.getId(), planSlug.trim(), cycle);
   }
 
   private void createActiveSubscriptionForBusiness(
       UUID businessId, String planSlug, String billingCycle) {
-    Plan plan =
-        planRepository
-            .findBySlug(planSlug)
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
+    Plan plan = planRepository
+        .findBySlug(planSlug)
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", planSlug));
     if (!Boolean.TRUE.equals(plan.getIsActive())) {
       throw new IllegalArgumentException("Plan is not active: " + planSlug);
     }
-    Optional<Subscription> currentOpt =
-        subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(businessId);
+    Optional<Subscription> currentOpt = subscriptionRepository.findFirstByBusinessIdOrderByCreatedAtDesc(businessId);
     if (currentOpt.isPresent()) {
       Subscription current = currentOpt.get();
       if (SubscriptionStatus.ACCESS_GRANTING.contains(current.getStatus())) {
@@ -379,26 +371,27 @@ public class AdminBusinessService {
               biz.setTrialUsedAt(Instant.now());
               businessRepository.save(biz);
             });
+
+    checkoutNotificationService.notifyPaid(
+        businessId, plan.getName(), billingCycle, end);
   }
 
   public List<AdminPlanItem> listPlansForAdmin(UserPrincipal p) {
     return planRepository.findByIsActiveTrueOrderByPriceMonthlyAsc().stream()
         .map(
-            plan ->
-                new AdminPlanItem(
-                    plan.getId(),
-                    plan.getSlug(),
-                    plan.getName(),
-                    plan.getPriceMonthly(),
-                    plan.getPriceYearly()))
+            plan -> new AdminPlanItem(
+                plan.getId(),
+                plan.getSlug(),
+                plan.getName(),
+                plan.getPriceMonthly(),
+                plan.getPriceYearly()))
         .toList();
   }
 
   public void setStatus(UUID businessId, String status, UserPrincipal p) {
-    Business b =
-        businessRepository
-            .findById(businessId)
-            .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+    Business b = businessRepository
+        .findById(businessId)
+        .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     if ("suspended".equals(status)) {
       b.suspend();
     } else if ("active".equals(status)) {
@@ -412,11 +405,10 @@ public class AdminBusinessService {
   private Map<UUID, String> loadOwners(List<UUID> bizIds) {
     return bizIds.stream()
         .flatMap(
-            bizId ->
-                businessUserRepository.findByBusinessIdOrderByCreatedAtWithRole(bizId).stream()
-                    .filter(bu -> "PROPRIETAIRE".equalsIgnoreCase(bu.getBusinessRole().getCode()))
-                    .findFirst()
-                    .stream())
+            bizId -> businessUserRepository.findByBusinessIdOrderByCreatedAtWithRole(bizId).stream()
+                .filter(bu -> "PROPRIETAIRE".equalsIgnoreCase(bu.getBusinessRole().getCode()))
+                .findFirst()
+                .stream())
         .collect(
             Collectors.toMap(
                 BusinessUser::getBusinessId,
@@ -465,10 +457,9 @@ public class AdminBusinessService {
   }
 
   private AdminBusinessSubscriptionInfo toSubscriptionInfo(Subscription sub) {
-    Plan plan =
-        planRepository
-            .findById(sub.getPlanId())
-            .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
+    Plan plan = planRepository
+        .findById(sub.getPlanId())
+        .orElseThrow(() -> new ResourceNotFoundException("Plan", sub.getPlanId()));
     LocalDate today = LocalDate.now();
     long daysRemaining = ChronoUnit.DAYS.between(today, sub.getCurrentPeriodEnd());
     if (daysRemaining < 0) {
@@ -492,7 +483,8 @@ public class AdminBusinessService {
   }
 
   private Map<UUID, Long> loadMonthlyRevenue(List<UUID> bizIds) {
-    if (bizIds.isEmpty()) return Map.of();
+    if (bizIds.isEmpty())
+      return Map.of();
     LocalDate now = LocalDate.now();
     Instant monthStart = now.withDayOfMonth(1).atStartOfDay().toInstant(ZoneOffset.UTC);
     Instant monthEnd = now.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
