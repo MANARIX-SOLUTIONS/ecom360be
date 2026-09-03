@@ -92,6 +92,7 @@ public class CachedLookups {
     return new CategoryResponse(
         c.getId(),
         c.getBusinessId(),
+        c.getParentId(),
         c.getName(),
         c.getColor(),
         c.getSortOrder(),
