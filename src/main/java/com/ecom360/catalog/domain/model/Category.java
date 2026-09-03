@@ -14,6 +14,9 @@ public class Category {
   @Column(name = "business_id", nullable = false)
   private UUID businessId;
 
+  @Column(name = "parent_id")
+  private UUID parentId;
+
   @Column(nullable = false)
   private String name;
 
@@ -44,6 +47,14 @@ public class Category {
 
   public void setBusinessId(UUID v) {
     this.businessId = v;
+  }
+
+  public UUID getParentId() {
+    return parentId;
+  }
+
+  public void setParentId(UUID v) {
+    this.parentId = v;
   }
 
   public String getName() {

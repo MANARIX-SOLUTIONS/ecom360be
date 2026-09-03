@@ -11,4 +11,10 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
   List<Category> findByBusinessIdOrderBySortOrderAsc(UUID businessId);
 
   boolean existsByBusinessIdAndName(UUID businessId, String name);
+
+  boolean existsByBusinessIdAndParentIdIsNullAndName(UUID businessId, String name);
+
+  boolean existsByBusinessIdAndParentIdAndName(UUID businessId, UUID parentId, String name);
+
+  long countByBusinessIdAndParentId(UUID businessId, UUID parentId);
 }

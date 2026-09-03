@@ -4,4 +4,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record CategoryResponse(
-    UUID id, UUID businessId, String name, String color, Integer sortOrder, Instant createdAt) {}
+    UUID id,
+    UUID businessId,
+    UUID parentId,
+    String name,
+    String color,
+    Integer sortOrder,
+    Instant createdAt) {}

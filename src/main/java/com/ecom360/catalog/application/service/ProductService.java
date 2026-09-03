@@ -25,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProductService {
   private final ProductRepository productRepo;
   private final CategoryRepository categoryRepo;
+  private final CategoryService categoryService;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
   private final AuditLogService auditLogService;
@@ -34,6 +35,7 @@ public class ProductService {
   public ProductService(
       ProductRepository productRepo,
       CategoryRepository categoryRepo,
+      CategoryService categoryService,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService,
       AuditLogService auditLogService,
@@ -41,6 +43,7 @@ public class ProductService {
       ProductImageStorageService productImageStorageService) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
+    this.categoryService = categoryService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
     this.auditLogService = auditLogService;
@@ -69,10 +72,8 @@ public class ProductService {
         && !r.sku().isBlank()
         && productRepo.existsByBusinessIdAndSku(p.businessId(), r.sku()))
       throw new ResourceAlreadyExistsException("Product with SKU", r.sku());
-    if (r.categoryId() != null
-        && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
-            .noneMatch(c -> c.getId().equals(r.categoryId())))
-      throw new ResourceNotFoundException("Category", r.categoryId());
+    if (r.categoryId() != null)
+      categoryService.requireLeafCategory(r.categoryId(), p.businessId());
     Store store = storeRepository
         .findById(r.storeId())
         .filter(s -> s.belongsTo(p.businessId()))
@@ -151,10 +152,8 @@ public class ProductService {
         && !r.sku().equals(prod.getSku())
         && productRepo.existsByBusinessIdAndSku(p.businessId(), r.sku()))
       throw new ResourceAlreadyExistsException("Product with SKU", r.sku());
-    if (r.categoryId() != null
-        && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
-            .noneMatch(c -> c.getId().equals(r.categoryId())))
-      throw new ResourceNotFoundException("Category", r.categoryId());
+    if (r.categoryId() != null)
+      categoryService.requireLeafCategory(r.categoryId(), p.businessId());
     if (r.storeId() != null && !r.storeId().equals(prod.getStoreId())) {
       Store store = storeRepository
           .findById(r.storeId())
