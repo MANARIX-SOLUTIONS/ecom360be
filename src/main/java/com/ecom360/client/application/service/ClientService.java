@@ -139,7 +139,7 @@ public class ClientService {
     notificationPublisher.notifyBusiness(
         p.businessId(),
         NotificationTypes.PAYMENT_RECEIVED,
-        "Paiement crédit reçu",
+        "Paiement client reçu",
         pay.getAmount()
             + " FCFA reçus de "
             + c.getName()

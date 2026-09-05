@@ -493,7 +493,7 @@ public class SaleService {
           "Cette vente est hors de la période d'historique de votre plan.");
     }
     if (!sale.isCompleted())
-      throw new BusinessRuleException("Only completed sales can be voided");
+      throw new BusinessRuleException("Seules les ventes validées peuvent être annulées.");
     sale.markVoided();
     List<SaleLine> lines = lineRepo.findBySaleId(sale.getId());
     for (SaleLine line : lines)
