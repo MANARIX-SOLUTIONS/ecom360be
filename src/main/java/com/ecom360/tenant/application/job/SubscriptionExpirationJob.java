@@ -1,5 +1,6 @@
 package com.ecom360.tenant.application.job;
 
+import com.ecom360.tenant.application.service.SubscriptionExpirationNotificationService;
 import com.ecom360.tenant.domain.model.Subscription;
 import com.ecom360.tenant.domain.repository.BusinessRepository;
 import com.ecom360.tenant.domain.repository.SubscriptionRepository;
@@ -23,11 +24,15 @@ public class SubscriptionExpirationJob {
 
   private final SubscriptionRepository subscriptionRepository;
   private final BusinessRepository businessRepository;
+  private final SubscriptionExpirationNotificationService expirationNotificationService;
 
   public SubscriptionExpirationJob(
-      SubscriptionRepository subscriptionRepository, BusinessRepository businessRepository) {
+      SubscriptionRepository subscriptionRepository,
+      BusinessRepository businessRepository,
+      SubscriptionExpirationNotificationService expirationNotificationService) {
     this.subscriptionRepository = subscriptionRepository;
     this.businessRepository = businessRepository;
+    this.expirationNotificationService = expirationNotificationService;
   }
 
   /** Run daily at 02:00 — expire trials/subscriptions and process cancel-at-period-end. */
@@ -38,14 +43,18 @@ public class SubscriptionExpirationJob {
 
     List<Subscription> toExpire = subscriptionRepository.findExpiredTrialsAndSubscriptions(today);
     for (Subscription sub : toExpire) {
+      boolean wasTrialing = sub.isTrialing();
+      LocalDate periodEnd = sub.getCurrentPeriodEnd();
       sub.expire();
       subscriptionRepository.save(sub);
-      syncBusinessStatusOnExpiration(sub.getBusinessId(), sub.isTrialing());
+      syncBusinessStatusOnExpiration(sub.getBusinessId(), wasTrialing);
+      expirationNotificationService.notifyExpired(
+          sub.getBusinessId(), wasTrialing, periodEnd);
       log.info(
           "Expired subscription {} (business={}, wasTrialing={})",
           sub.getId(),
           sub.getBusinessId(),
-          sub.isTrialing());
+          wasTrialing);
     }
 
     List<Subscription> toCancel = subscriptionRepository.findCancelledAtPeriodEnd(today);

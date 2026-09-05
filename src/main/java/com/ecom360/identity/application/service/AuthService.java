@@ -14,6 +14,7 @@ import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.shared.infrastructure.mail.EmailService;
 import com.ecom360.tenant.application.service.BusinessRoleBootstrapService;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import com.ecom360.tenant.application.service.TenantWelcomeNotificationService;
 import com.ecom360.tenant.domain.model.Business;
 import com.ecom360.tenant.domain.model.BusinessRole;
 import com.ecom360.tenant.domain.model.BusinessUser;
@@ -48,6 +49,7 @@ public class AuthService {
   private final EmailService emailService;
   private final BusinessRoleBootstrapService businessRoleBootstrapService;
   private final BusinessRoleRepository businessRoleRepository;
+  private final TenantWelcomeNotificationService tenantWelcomeNotificationService;
 
   public AuthService(
       UserRepository userRepository,
@@ -61,7 +63,8 @@ public class AuthService {
       JwtProperties jwtProperties,
       EmailService emailService,
       BusinessRoleBootstrapService businessRoleBootstrapService,
-      BusinessRoleRepository businessRoleRepository) {
+      BusinessRoleRepository businessRoleRepository,
+      TenantWelcomeNotificationService tenantWelcomeNotificationService) {
     this.userRepository = userRepository;
     this.businessRepository = businessRepository;
     this.businessUserRepository = businessUserRepository;
@@ -74,6 +77,7 @@ public class AuthService {
     this.emailService = emailService;
     this.businessRoleBootstrapService = businessRoleBootstrapService;
     this.businessRoleRepository = businessRoleRepository;
+    this.tenantWelcomeNotificationService = tenantWelcomeNotificationService;
   }
 
   private static String hashToken(String token) {
@@ -96,9 +100,9 @@ public class AuthService {
     if (!user.isActive()) {
       throw new BusinessRuleException("Account is deactivated");
     }
-    //        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-    //            throw new BusinessRuleException("Invalid email or password");
-    //        }
+    // if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+    // throw new BusinessRuleException("Invalid email or password");
+    // }
 
     user.recordLogin();
     userRepository.save(user);
@@ -127,16 +131,12 @@ public class AuthService {
 
   /**
    * Crée utilisateur + entreprise + essai après validation admin d'une demande de démo. Si {@code
-   * passwordHashOrNull} est vide, un mot de passe aléatoire est posé (le demandeur utilisera le lien
-   * « définir le mot de passe »).
+   * passwordHashOrNull} est vide, un mot de passe aléatoire est posé (le demandeur utilisera le
+   * lien « définir le mot de passe »).
    */
   @Transactional
   public ProvisionedTenant provisionTenantAfterDemoApproval(
-      String fullName,
-      String email,
-      String passwordHashOrNull,
-      String phone,
-      String businessName) {
+      String fullName, String email, String passwordHashOrNull, String phone, String businessName) {
     if (userRepository.existsByEmail(email)) {
       throw new ResourceAlreadyExistsException("User", email);
     }
@@ -178,6 +178,8 @@ public class AuthService {
             business.getName(),
             "source",
             "demo_request"));
+
+    tenantWelcomeNotificationService.sendWelcomeAfterProvisioning(business.getId(), user.getId());
 
     return new ProvisionedTenant(business.getId(), user.getId());
   }

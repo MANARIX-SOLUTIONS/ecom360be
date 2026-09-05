@@ -8,11 +8,14 @@ import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.dto.*;
 import com.ecom360.inventory.domain.model.*;
 import com.ecom360.inventory.domain.repository.*;
+import com.ecom360.notification.application.service.NotificationPublisher;
+import com.ecom360.notification.application.service.NotificationTypes;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.model.Store;
 import com.ecom360.store.domain.repository.StoreRepository;
 import java.util.Collection;
 import java.util.HashMap;
+import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,18 +31,24 @@ public class StockService {
   private final ProductRepository productRepo;
   private final StoreRepository storeRepo;
   private final RolePermissionService permissionService;
+  private final SubscriptionService subscriptionService;
+  private final NotificationPublisher notificationPublisher;
 
   public StockService(
       ProductStoreStockRepository stockRepo,
       StockMovementRepository movementRepo,
       ProductRepository productRepo,
       StoreRepository storeRepo,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      SubscriptionService subscriptionService,
+      NotificationPublisher notificationPublisher) {
     this.stockRepo = stockRepo;
     this.movementRepo = movementRepo;
     this.productRepo = productRepo;
     this.storeRepo = storeRepo;
     this.permissionService = permissionService;
+    this.subscriptionService = subscriptionService;
+    this.notificationPublisher = notificationPublisher;
   }
 
   @Transactional
@@ -116,6 +125,7 @@ public class StockService {
             s.getQuantity(),
             r.reference(),
             r.note()));
+    notifyLowStockIfNeeded(p.businessId(), s);
     return mapMov(m);
   }
 
@@ -196,6 +206,9 @@ public class StockService {
     movementRepo.save(
         StockMovement.record(
             productId, storeId, userId, "sale", -qty, before, s.getQuantity(), saleId, null));
+    storeRepo
+        .findById(storeId)
+        .ifPresent(store -> notifyLowStockIfNeeded(store.getBusinessId(), s));
   }
 
   @Transactional
@@ -280,10 +293,45 @@ public class StockService {
     return stores;
   }
 
+  private void notifyLowStockIfNeeded(UUID businessId, ProductStoreStock s) {
+    if (businessId == null || !s.isLowStock()) {
+      return;
+    }
+    boolean alertsOn = subscriptionService
+        .getPlanForBusiness(businessId)
+        .map(plan -> Boolean.TRUE.equals(plan.getFeatureStockAlerts()))
+        .orElse(true);
+    if (!alertsOn) {
+      return;
+    }
+    String productName = productRepo
+        .findById(s.getProductId())
+        .map(Product::getName)
+        .orElse("Produit");
+    String storeName = storeRepo.findById(s.getStoreId()).map(Store::getName).orElse("Boutique");
+    String actionUrl = "/products/" + s.getProductId() + "?storeId=" + s.getStoreId();
+    notificationPublisher.notifyBusiness(
+        businessId,
+        NotificationTypes.LOW_STOCK,
+        "Stock faible — " + productName,
+        productName
+            + " : "
+            + s.getQuantity()
+            + " restant(s) à "
+            + storeName
+            + " (seuil "
+            + s.getMinStock()
+            + ").",
+        actionUrl,
+        NotificationPublisher.LOW_STOCK_DEDUP,
+        Permission.STOCK_READ);
+  }
+
   private StockLevelResponse mapLevel(
       ProductStoreStock s, Map<UUID, Product> products, Map<UUID, Store> stores) {
     Product pr = products.get(s.getProductId());
     Store st = stores.get(s.getStoreId());
+
     return new StockLevelResponse(
         s.getId(),
         s.getProductId(),

@@ -3,6 +3,7 @@ package com.ecom360.store.application.service;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.inventory.application.service.SharedCatalogStockService;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.shared.infrastructure.cache.CachedLookups;
@@ -14,6 +15,7 @@ import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class StoreService {
@@ -21,27 +23,34 @@ public class StoreService {
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
   private final CachedLookups cachedLookups;
+  private final SharedCatalogStockService sharedCatalogStockService;
 
   public StoreService(
       StoreRepository storeRepository,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService,
-      CachedLookups cachedLookups) {
+      CachedLookups cachedLookups,
+      SharedCatalogStockService sharedCatalogStockService) {
     this.storeRepository = storeRepository;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
     this.cachedLookups = cachedLookups;
+    this.sharedCatalogStockService = sharedCatalogStockService;
   }
 
+  @Transactional
   public StoreResponse create(StoreRequest req, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.STORES_CREATE);
     subscriptionService.assertCanAddStore(
         p.businessId(), storeRepository.findByBusinessId(p.businessId()).size());
     Store s = Store.create(p.businessId(), req.name(), req.address(), req.phone());
-    StoreResponse created = map(storeRepository.save(s));
+    Store saved = storeRepository.save(s);
+    if (sharedCatalogStockService.isSharedCatalog(p.businessId())) {
+      sharedCatalogStockService.backfillForNewStore(p.businessId(), saved.getId());
+    }
     cachedLookups.evictAllStores();
-    return created;
+    return map(saved);
   }
 
   public StoreResponse getById(UUID id, UserPrincipal p) {

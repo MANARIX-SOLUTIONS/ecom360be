@@ -25,20 +25,39 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
   /** Trialing or active subscriptions past due for expiration. */
   @Query(
       """
-    SELECT s FROM Subscription s
-    WHERE s.status IN ('trialing', 'active')
-    AND s.currentPeriodEnd < :before
-    AND (s.cancelAtPeriodEnd = false OR s.cancelAtPeriodEnd IS NULL)
-    """)
+      SELECT s FROM Subscription s
+      WHERE s.status IN ('trialing', 'active')
+      AND s.currentPeriodEnd < :before
+      AND (s.cancelAtPeriodEnd = false OR s.cancelAtPeriodEnd IS NULL)
+      """)
   List<Subscription> findExpiredTrialsAndSubscriptions(@Param("before") LocalDate before);
 
   /** Active subscriptions with cancel_at_period_end that reached period end. */
   @Query(
       """
-    SELECT s FROM Subscription s
-    WHERE s.status IN ('trialing', 'active')
-    AND s.currentPeriodEnd < :before
-    AND s.cancelAtPeriodEnd = true
-    """)
+      SELECT s FROM Subscription s
+      WHERE s.status IN ('trialing', 'active')
+      AND s.currentPeriodEnd < :before
+      AND s.cancelAtPeriodEnd = true
+      """)
   List<Subscription> findCancelledAtPeriodEnd(@Param("before") LocalDate before);
+
+  /** Trialing or active subscriptions whose period ends exactly on the given date. */
+  @Query(
+      """
+      SELECT s FROM Subscription s
+      WHERE s.status IN ('trialing', 'active')
+      AND s.currentPeriodEnd = :periodEnd
+      """)
+  List<Subscription> findTrialingOrActiveWithPeriodEnd(@Param("periodEnd") LocalDate periodEnd);
+
+  /** Subscriptions in past_due whose grace period ends on the given date (if set). */
+  @Query(
+      """
+      SELECT s FROM Subscription s
+      WHERE s.status = 'past_due'
+      AND s.gracePeriodEndsAt IS NOT NULL
+      AND s.gracePeriodEndsAt = :graceEnd
+      """)
+  List<Subscription> findPastDueWithGraceEndingOn(@Param("graceEnd") LocalDate graceEnd);
 }

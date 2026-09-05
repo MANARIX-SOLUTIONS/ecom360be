@@ -35,6 +35,7 @@ public class SubscriptionService {
   private final PlanRepository planRepository;
   private final BusinessRepository businessRepository;
   private final RolePermissionService permissionService;
+  private final SubscriptionCheckoutNotificationService checkoutNotificationService;
   private final CachedLookups cachedLookups;
 
   public SubscriptionService(
@@ -42,11 +43,13 @@ public class SubscriptionService {
       PlanRepository planRepository,
       BusinessRepository businessRepository,
       RolePermissionService permissionService,
+      SubscriptionCheckoutNotificationService checkoutNotificationService,
       CachedLookups cachedLookups) {
     this.subscriptionRepository = subscriptionRepository;
     this.planRepository = planRepository;
     this.businessRepository = businessRepository;
     this.permissionService = permissionService;
+    this.checkoutNotificationService = checkoutNotificationService;
     this.cachedLookups = cachedLookups;
   }
 
@@ -291,6 +294,9 @@ public class SubscriptionService {
               biz.setTrialUsedAt(Instant.now());
               businessRepository.save(biz);
             });
+
+    checkoutNotificationService.notifyPaid(
+        businessId, plan.getName(), cycle, end);
 
     return sub;
   }

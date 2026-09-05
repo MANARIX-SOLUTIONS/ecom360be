@@ -1,6 +1,7 @@
 package com.ecom360.notification.domain.repository;
 
 import com.ecom360.notification.domain.model.Notification;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,9 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
   Page<Notification> findByUserIdAndIsReadOrderByCreatedAtDesc(UUID uId, Boolean r, Pageable p);
 
   long countByUserIdAndIsRead(UUID uId, Boolean r);
+
+  boolean existsByBusinessIdAndTypeAndActionUrlAndCreatedAtAfter(
+      UUID businessId, String type, String actionUrl, Instant since);
 
   @Modifying
   @Query(

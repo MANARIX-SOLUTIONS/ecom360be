@@ -83,7 +83,8 @@ public class DemoRequestService {
         java.util.Map.of("email", email, "businessName", dr.getBusinessName()));
 
     try {
-      emailService.sendDemoRequestReceivedEmail(dr.getEmail(), dr.getFullName(), dr.getBusinessName());
+      emailService.sendDemoRequestReceivedEmail(
+          dr.getEmail(), dr.getFullName(), dr.getBusinessName());
     } catch (Exception ignored) {
       // Ne pas bloquer l'enregistrement si l'e-mail échoue
     }
@@ -137,7 +138,8 @@ public class DemoRequestService {
       try {
         String raw = authService.createPasswordResetToken(pt.userId());
         String link = emailService.buildResetPasswordLink(raw);
-        emailService.sendInvitationEmail(dr.getEmail(), dr.getFullName(), dr.getBusinessName(), link);
+        emailService.sendInvitationEmail(
+            dr.getEmail(), dr.getFullName(), dr.getBusinessName(), link);
       } catch (Exception ignored) {
         // compte créé même si l'e-mail échoue
       }
@@ -164,9 +166,7 @@ public class DemoRequestService {
         "DEMO_REQUEST_REJECTED",
         "DemoRequest",
         dr.getId(),
-        java.util.Map.of(
-            "email", dr.getEmail(),
-            "reason", reason != null ? reason : ""));
+        java.util.Map.of("email", dr.getEmail(), "reason", reason != null ? reason : ""));
 
     try {
       emailService.sendDemoRequestRejectedEmail(dr.getEmail(), dr.getFullName(), reason);

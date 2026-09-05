@@ -2,6 +2,7 @@ package com.ecom360.tenant.infrastructure.web;
 
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
+import com.ecom360.tenant.application.dto.BusinessCatalogModeRequest;
 import com.ecom360.tenant.application.dto.BusinessLogoRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileResponse;
@@ -39,6 +40,13 @@ public class BusinessController {
   public ResponseEntity<BusinessProfileResponse> updateMe(
       @Valid @RequestBody BusinessProfileRequest req, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(businessProfileService.update(req, p));
+  }
+
+  @PatchMapping("/me/catalog-mode")
+  @Operation(summary = "Choisir catalogue partagé ou catalogue par boutique")
+  public ResponseEntity<BusinessProfileResponse> updateCatalogMode(
+      @Valid @RequestBody BusinessCatalogModeRequest req, @AuthenticationPrincipal UserPrincipal p) {
+    return ResponseEntity.ok(businessProfileService.updateCatalogMode(req, p));
   }
 
   @PatchMapping("/me/logo")
