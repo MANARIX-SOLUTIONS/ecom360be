@@ -9,6 +9,7 @@ import com.ecom360.catalog.infrastructure.storage.ProductImageStorageService;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.inventory.application.service.SharedCatalogStockService;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.model.Store;
 import com.ecom360.store.domain.repository.StoreRepository;
@@ -30,6 +31,7 @@ public class ProductService {
   private final AuditLogService auditLogService;
   private final StoreRepository storeRepository;
   private final ProductImageStorageService productImageStorageService;
+  private final SharedCatalogStockService sharedCatalogStockService;
 
   public ProductService(
       ProductRepository productRepo,
@@ -38,7 +40,8 @@ public class ProductService {
       RolePermissionService permissionService,
       AuditLogService auditLogService,
       StoreRepository storeRepository,
-      ProductImageStorageService productImageStorageService) {
+      ProductImageStorageService productImageStorageService,
+      SharedCatalogStockService sharedCatalogStockService) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
     this.subscriptionService = subscriptionService;
@@ -46,8 +49,10 @@ public class ProductService {
     this.auditLogService = auditLogService;
     this.storeRepository = storeRepository;
     this.productImageStorageService = productImageStorageService;
+    this.sharedCatalogStockService = sharedCatalogStockService;
   }
 
+  @Transactional
   public ProductResponse create(ProductRequest r, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.PRODUCTS_CREATE);
@@ -82,6 +87,12 @@ public class ProductService {
     prod.setStoreId(store.getId());
     applyFields(prod, r);
     Product saved = productRepo.save(prod);
+    if (sharedCatalogStockService.isSharedCatalog(p.businessId())) {
+      int initialStock = r.initialStock() != null ? r.initialStock() : 0;
+      int minStock = r.minStock() != null ? r.minStock() : 0;
+      sharedCatalogStockService.provisionForNewProduct(
+          p.businessId(), saved.getId(), store.getId(), initialStock, minStock, p.userId());
+    }
     auditLogService.logAsync(
         p.businessId(),
         p.userId(),
@@ -102,7 +113,8 @@ public class ProductService {
     requireBiz(p);
     permissionService.require(p, Permission.PRODUCTS_READ);
     Page<Product> page;
-    if (storeId != null) {
+    boolean shared = sharedCatalogStockService.isSharedCatalog(p.businessId());
+    if (storeId != null && !shared) {
       Store store = storeRepository
           .findById(storeId)
           .filter(s -> s.belongsTo(p.businessId()))
@@ -134,7 +146,9 @@ public class ProductService {
         && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
             .noneMatch(c -> c.getId().equals(r.categoryId())))
       throw new ResourceNotFoundException("Category", r.categoryId());
-    if (r.storeId() != null && !r.storeId().equals(prod.getStoreId())) {
+    if (r.storeId() != null
+        && !r.storeId().equals(prod.getStoreId())
+        && !sharedCatalogStockService.isSharedCatalog(p.businessId())) {
       Store store = storeRepository
           .findById(r.storeId())
           .filter(s -> s.belongsTo(p.businessId()))

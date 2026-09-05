@@ -1,9 +1,12 @@
 package com.ecom360.tenant.application.service;
 
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.inventory.application.service.SharedCatalogStockService;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
+import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceAlreadyExistsException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
+import com.ecom360.tenant.application.dto.BusinessCatalogModeRequest;
 import com.ecom360.tenant.application.dto.BusinessLogoRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileRequest;
 import com.ecom360.tenant.application.dto.BusinessProfileResponse;
@@ -21,35 +24,26 @@ public class BusinessProfileService {
   private final BusinessRepository businessRepository;
   private final SubscriptionService subscriptionService;
   private final BusinessLogoStorageService businessLogoStorageService;
+  private final SharedCatalogStockService sharedCatalogStockService;
 
   public BusinessProfileService(
       BusinessRepository businessRepository,
       SubscriptionService subscriptionService,
-      BusinessLogoStorageService businessLogoStorageService) {
+      BusinessLogoStorageService businessLogoStorageService,
+      SharedCatalogStockService sharedCatalogStockService) {
     this.businessRepository = businessRepository;
     this.subscriptionService = subscriptionService;
     this.businessLogoStorageService = businessLogoStorageService;
+    this.sharedCatalogStockService = sharedCatalogStockService;
   }
 
   public BusinessProfileResponse get(UserPrincipal p) {
-    Business b = findBusiness(p);
-    return new BusinessProfileResponse(
-        b.getId(),
-        b.getName(),
-        b.getEmail(),
-        b.getPhone(),
-        b.getAddress(),
-        b.getLogoUrl(),
-        b.getCreatedAt());
+    return map(findBusiness(p));
   }
 
   @Transactional
   public BusinessProfileResponse update(BusinessProfileRequest req, UserPrincipal p) {
-    String role = p.role() != null ? p.role() : "";
-    if (!"proprietaire".equalsIgnoreCase(role) && !p.isPlatformAdmin()) {
-      throw new AccessDeniedException(
-          "Seul le rôle propriétaire peut modifier les informations de l'entreprise");
-    }
+    requireOwner(p, "Seul le rôle propriétaire peut modifier les informations de l'entreprise");
     Business b = findBusiness(p);
     UUID currentId = b.getId();
     if (!req.email().equalsIgnoreCase(b.getEmail())) {
@@ -66,14 +60,25 @@ public class BusinessProfileService {
     b.setPhone(req.phone());
     b.setAddress(req.address());
     b = businessRepository.save(b);
-    return new BusinessProfileResponse(
-        b.getId(),
-        b.getName(),
-        b.getEmail(),
-        b.getPhone(),
-        b.getAddress(),
-        b.getLogoUrl(),
-        b.getCreatedAt());
+    return map(b);
+  }
+
+  @Transactional
+  public BusinessProfileResponse updateCatalogMode(BusinessCatalogModeRequest req, UserPrincipal p) {
+    requireOwner(p, "Seul le rôle propriétaire peut modifier le mode catalogue");
+    Business b = findBusiness(p);
+    String mode = req.catalogMode() != null ? req.catalogMode().trim().toUpperCase() : "";
+    if (!Business.CATALOG_MODE_PER_STORE.equals(mode)
+        && !Business.CATALOG_MODE_SHARED.equals(mode)) {
+      throw new BusinessRuleException("Mode catalogue invalide");
+    }
+    boolean enablingShared = Business.CATALOG_MODE_SHARED.equals(mode) && !b.hasSharedCatalog();
+    b.setCatalogMode(mode);
+    b = businessRepository.save(b);
+    if (enablingShared) {
+      sharedCatalogStockService.backfillMissingForBusiness(b.getId());
+    }
+    return map(b);
   }
 
   @Transactional
@@ -101,14 +106,7 @@ public class BusinessProfileService {
       b.setLogoUrl(nl);
     }
     b = businessRepository.save(b);
-    return new BusinessProfileResponse(
-        b.getId(),
-        b.getName(),
-        b.getEmail(),
-        b.getPhone(),
-        b.getAddress(),
-        b.getLogoUrl(),
-        b.getCreatedAt());
+    return map(b);
   }
 
   @Transactional
@@ -131,6 +129,18 @@ public class BusinessProfileService {
     String relative = businessLogoStorageService.saveUploadedLogo(p.businessId(), file);
     b.setLogoUrl(relative);
     b = businessRepository.save(b);
+    return map(b);
+  }
+
+  private void requireOwner(UserPrincipal p, String message) {
+    String role = p.role() != null ? p.role() : "";
+    if (!"proprietaire".equalsIgnoreCase(role) && !p.isPlatformAdmin()) {
+      throw new AccessDeniedException(message);
+    }
+  }
+
+  private BusinessProfileResponse map(Business b) {
+    String mode = b.getCatalogMode() != null ? b.getCatalogMode() : Business.CATALOG_MODE_PER_STORE;
     return new BusinessProfileResponse(
         b.getId(),
         b.getName(),
@@ -138,7 +148,8 @@ public class BusinessProfileService {
         b.getPhone(),
         b.getAddress(),
         b.getLogoUrl(),
-        b.getCreatedAt());
+        b.getCreatedAt(),
+        mode);
   }
 
   private Business findBusiness(UserPrincipal p) {

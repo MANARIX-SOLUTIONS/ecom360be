@@ -14,9 +14,13 @@ public record ProductRequest(
     @Size(max = 500) String imageUrl,
     UUID categoryId,
     @NotNull Boolean isActive,
-    @NotNull UUID storeId) {
+    @NotNull UUID storeId,
+    @Min(0) Integer initialStock,
+    @Min(0) Integer minStock) {
   public ProductRequest {
-    if (unit == null || unit.isBlank()) unit = "pièce";
-    if (isActive == null) isActive = true;
+    if (unit == null || unit.isBlank())
+      unit = "pièce";
+    if (isActive == null)
+      isActive = true;
   }
 }

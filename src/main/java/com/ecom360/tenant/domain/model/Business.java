@@ -9,6 +9,9 @@ import java.time.LocalDate;
 @Table(name = "business", uniqueConstraints = @UniqueConstraint(columnNames = "email"))
 public class Business extends AggregateRoot {
 
+  public static final String CATALOG_MODE_PER_STORE = "PER_STORE";
+  public static final String CATALOG_MODE_SHARED = "SHARED";
+
   @Column(nullable = false)
   private String name;
 
@@ -35,6 +38,9 @@ public class Business extends AggregateRoot {
   @Column(nullable = false)
   private String status = "active";
 
+  @Column(name = "catalog_mode", nullable = false)
+  private String catalogMode = CATALOG_MODE_PER_STORE;
+
   @Column(name = "trial_ends_at")
   private LocalDate trialEndsAt;
 
@@ -50,6 +56,7 @@ public class Business extends AggregateRoot {
     b.status = "trial";
     b.currency = "XOF";
     b.locale = "fr";
+    b.catalogMode = CATALOG_MODE_PER_STORE;
     return b;
   }
 
@@ -156,5 +163,17 @@ public class Business extends AggregateRoot {
   /** True if this business has already used its trial (expired or converted to paid). */
   public boolean hasUsedTrial() {
     return trialUsedAt != null;
+  }
+
+  public String getCatalogMode() {
+    return catalogMode;
+  }
+
+  public void setCatalogMode(String catalogMode) {
+    this.catalogMode = catalogMode;
+  }
+
+  public boolean hasSharedCatalog() {
+    return CATALOG_MODE_SHARED.equals(catalogMode);
   }
 }

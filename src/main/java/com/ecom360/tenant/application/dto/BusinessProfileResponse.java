@@ -10,4 +10,5 @@ public record BusinessProfileResponse(
     String phone,
     String address,
     String logoUrl,
-    Instant createdAt) {}
+    Instant createdAt,
+    String catalogMode) {}
