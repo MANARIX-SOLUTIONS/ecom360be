@@ -66,8 +66,9 @@ spring:
       spec: maximumSize=2000,expireAfterWrite=300s
 
 # ── Server — production tuning ──
+# SERVER_PORT in .env overrides this (align Nginx / systemd health checks)
 server:
-  port: 8090
+  port: ${SERVER_PORT:8090}
   error:
     include-message: never # never leak internals
     include-binding-errors: never
@@ -128,7 +129,7 @@ springdoc:
 # ── Actuator — secured, limited ──
 management:
   server:
-    port: 8081
+    port: ${MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
