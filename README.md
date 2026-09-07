@@ -68,6 +68,13 @@ DB_HOST=localhost DB_PORT=5432 DB_NAME=ecom360 DB_USERNAME=postgres DB_PASSWORD=
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/api-docs
 
+## Engineering docs
+
+| Guide | Topic |
+|-------|--------|
+| [docs/business-branding.md](docs/business-branding.md) | Business profile, logo upload/public serve, `feature_custom_branding` |
+| [docs/dormant-platform-tables.md](docs/dormant-platform-tables.md) | Unused `feature_flag` / `platform_config` / `invoice`; notification read API |
+
 ## API Endpoints
 
 ### Public
