@@ -17,7 +17,7 @@ FROM eclipse-temurin:17-jre-alpine AS runtime
 RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 
 WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
+COPY --from=build /app/build/libs/ecom360be.jar app.jar
 
 # Writable roots: logs + persisted uploads (override with -e BUSINESS_LOGOS_DIR /
 # PRODUCT_IMAGES_DIR or a volume)

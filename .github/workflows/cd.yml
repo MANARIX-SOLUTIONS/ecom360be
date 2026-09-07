@@ -1,109 +1,87 @@
 # ──────────────────────────────────────────────────────────────
-# CD — Build Docker image → push to GHCR → deploy
-# Triggers:
-#   - Push to develop → staging
-#   - Push to main    → production (manual approval gate)
-#   - Release tag     → production (auto)
+# CD — Build boot JAR → SCP to VPS → systemd restart
+# Repo: ecom360be (API). Independent from ecom360fe.
 # ──────────────────────────────────────────────────────────────
 name: CD
 
 on:
   push:
-    branches: [main, develop]
-  release:
-    types: [published]
+    branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [staging, production]
+      action:
+        description: install = deposit new JAR; rollback = restore previous JAR
+        required: true
+        type: choice
+        default: install
+        options: [install, rollback]
 
 concurrency:
-  group: cd-${{ github.ref }}
-  cancel-in-progress: false          # never cancel deployments
+  group: cd-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  packages: write                    # push to GHCR
-  id-token: write                    # OIDC for cloud deploys
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  JAVA_VERSION: "17"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true"
 
 jobs:
-  # ════════════════════════════════════════════════════════════
-  # 1. Build & Push Docker image
-  # ════════════════════════════════════════════════════════════
-  build-image:
-    name: Build Docker Image
+  build-jar:
+    name: Build boot JAR
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'install'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build-push.outputs.digest }}
-      version: ${{ steps.version.outputs.version }}
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Determine version
-        id: version
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build boot JAR
+        run: ./gradlew bootJar --no-daemon -x test
+
+      - name: Prepare deploy artifact
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "version=main-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=dev-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
-          fi
+          test -f build/libs/ecom360be.jar
+          mkdir -p dist
+          cp build/libs/ecom360be.jar dist/app.jar
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to
-        uses: docker/login-action@v3
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: app-jar
+          path: dist/app.jar
+          retention-days: 14
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=
-
-      - name: Build and push
-        id: build-push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
-
-      - name: Image summary
-        run: |
-          echo "### Docker Image Published 🐳" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Digest:** \`${{ steps.build-push.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-
-  # ════════════════════════════════════════════════════════════
-  # 2. Deploy to STAGING (develop branch)
-  # ════════════════════════════════════════════════════════════
   deploy-staging:
     name: Deploy → Staging
-    needs: build-image
-    if: github.ref == 'refs/heads/develop'                                                  
+    needs: [build-jar]
+    if: |
+      always() && !cancelled() &&
+      (
+        (needs.build-jar.result == 'success' && (
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging' && inputs.action == 'install')
+        )) ||
+        (needs.build-jar.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.environment == 'staging' && inputs.action == 'rollback')
+      )
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment:
       name: staging
       url: ${{ vars.STAGING_URL }}
@@ -112,99 +90,113 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to staging
+      - name: Download JAR
+        if: inputs.action != 'rollback'
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: dist
+
+      - name: Deploy JAR over SSH
         env:
-          IMAGE_TAG: ${{ needs.build-image.outputs.version }}
           DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
           DEPLOY_USER: ${{ secrets.STAGING_USER }}
           DEPLOY_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          DEPLOY_PORT: ${{ vars.STAGING_SSH_PORT || '22' }}
+          DEPLOY_DIR: ${{ vars.STAGING_DEPLOY_DIR || '/opt/ecom360pme' }}
+          SERVICE_NAME: ${{ vars.STAGING_SERVICE_NAME || 'ecom360pme' }}
+          HEALTH_URL: ${{ vars.STAGING_HEALTH_URL || 'http://127.0.0.1:8081/actuator/health/liveness' }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          LOCAL_JAR: dist/app.jar
+          ACTION: ${{ inputs.action || 'install' }}
         run: |
-          echo "🚀 Deploying $IMAGE_TAG to staging..."
-          # ── Option A: SSH + docker compose ──
-          # mkdir -p ~/.ssh
-          # echo "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          # ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST << EOF
-          #   cd /opt/ecom360
-          #   export IMAGE_TAG=$IMAGE_TAG
-          #   docker compose -f docker-compose.staging.yml pull
-          #   docker compose -f docker-compose.staging.yml up -d --remove-orphans
-          #   docker compose -f docker-compose.staging.yml exec -T api wget --spider http://localhost:8080/actuator/health || exit 1
-          # EOF
-          echo "✅ Staging deployment placeholder — configure secrets to activate"
+          chmod +x scripts/ci-deploy-jar.sh scripts/remote-install-jar.sh
+          scripts/ci-deploy-jar.sh
 
-      - name: Verify health
+      - name: Public health check
         if: vars.STAGING_URL != ''
         run: |
-          echo "Waiting for staging to be healthy..."
-          for i in $(seq 1 30); do
-            if curl -sf "${{ vars.STAGING_URL }}/actuator/health" > /dev/null 2>&1; then
-              echo "✅ Staging is healthy"
+          echo "Checking ${{ vars.STAGING_URL }}/actuator/health ..."
+          for i in $(seq 1 20); do
+            if curl -sf "${{ vars.STAGING_URL }}/actuator/health" >/dev/null 2>&1; then
+              echo "Staging public URL is healthy"
               exit 0
             fi
-            sleep 5
+            sleep 3
           done
-          echo "❌ Staging health check failed"
-          exit 1
+          echo "Public health check failed (Nginx may not expose /actuator). SSH liveness already passed."
 
-  # ════════════════════════════════════════════════════════════
-  # 3. Deploy to PRODUCTION (main branch or release tag)
-  # ════════════════════════════════════════════════════════════
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Staging deployment"
+            echo "**Action:** \`${{ inputs.action || 'install' }}\`"
+            echo "**Commit:** \`${{ github.sha }}\`"
+            echo "**URL:** ${{ vars.STAGING_URL }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   deploy-production:
     name: Deploy → Production
-    needs: build-image
-    if: github.ref == 'refs/heads/main' || github.event_name == 'release'
+    needs: [build-jar]
+    if: |
+      always() && !cancelled() &&
+      (
+        (needs.build-jar.result == 'success' &&
+          github.event_name == 'workflow_dispatch' && inputs.environment == 'production' && inputs.action == 'install'
+        ) ||
+        (needs.build-jar.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.environment == 'production' && inputs.action == 'rollback')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
-      name: production                # requires manual approval in GitHub settings    
+      name: production
       url: ${{ vars.PRODUCTION_URL }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to production
+      - name: Download JAR
+        if: inputs.action != 'rollback'
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: dist
+
+      - name: Deploy JAR over SSH
         env:
-          IMAGE_TAG: ${{ needs.build-image.outputs.version }}
           DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
           DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
           DEPLOY_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          DEPLOY_PORT: ${{ vars.PRODUCTION_SSH_PORT || '22' }}
+          DEPLOY_DIR: ${{ vars.PRODUCTION_DEPLOY_DIR || '/opt/ecom360pme' }}
+          SERVICE_NAME: ${{ vars.PRODUCTION_SERVICE_NAME || 'ecom360pme' }}
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL || 'http://127.0.0.1:8081/actuator/health/liveness' }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          LOCAL_JAR: dist/app.jar
+          ACTION: ${{ inputs.action || 'install' }}
         run: |
-          echo "🚀 Deploying $IMAGE_TAG to production..."
-          # ── Option A: SSH + docker compose ──
-          # mkdir -p ~/.ssh
-          # echo "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          # ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST << EOF
-          #   cd /opt/ecom360
-          #   export IMAGE_TAG=$IMAGE_TAG
-          #   docker compose -f docker-compose.prod.yml pull
-          #   docker compose -f docker-compose.prod.yml up -d --remove-orphans
-          #   sleep 30
-          #   docker compose -f docker-compose.prod.yml exec -T api wget --spider http://localhost:8080/actuator/health || exit 1
-          # EOF
+          chmod +x scripts/ci-deploy-jar.sh scripts/remote-install-jar.sh
+          scripts/ci-deploy-jar.sh
 
-          # ── Option B: Kubernetes ──
-          # kubectl set image deployment/ecom360-api api=$REGISTRY/$IMAGE_NAME:$IMAGE_TAG
-          # kubectl rollout status deployment/ecom360-api --timeout=300s
-
-          echo "✅ Production deployment placeholder — configure secrets to activate"
-
-      - name: Verify health
+      - name: Public health check
         if: vars.PRODUCTION_URL != ''
         run: |
-          echo "Waiting for production to be healthy..."
-          for i in $(seq 1 30); do
-            if curl -sf "${{ vars.PRODUCTION_URL }}/actuator/health" > /dev/null 2>&1; then
-              echo "✅ Production is healthy"
+          echo "Checking ${{ vars.PRODUCTION_URL }}/actuator/health ..."
+          for i in $(seq 1 20); do
+            if curl -sf "${{ vars.PRODUCTION_URL }}/actuator/health" >/dev/null 2>&1; then
+              echo "Production public URL is healthy"
               exit 0
             fi
-            sleep 5
+            sleep 3
           done
-          echo "❌ Production health check failed"
-          exit 1
+          echo "Public health check failed (Nginx may not expose /actuator). SSH liveness already passed."
 
       - name: Deployment summary
         run: |
-          echo "### Production Deployment 🎉" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`${{ needs.build-image.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** ${{ vars.PRODUCTION_URL }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### Production deployment"
+            echo "**Action:** \`${{ inputs.action || 'install' }}\`"
+            echo "**Commit:** \`${{ github.sha }}\`"
+            echo "**URL:** ${{ vars.PRODUCTION_URL }}"
+          } >> "$GITHUB_STEP_SUMMARY"

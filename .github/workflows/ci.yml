@@ -1,7 +1,6 @@
 # ──────────────────────────────────────────────────────────────
-# CI — Continuous Integration
-# Triggers: every push to main/develop, every PR
-# Steps:  lint → compile → test (Testcontainers PG) → coverage
+# CI — Spotless, compile, test, coverage, bootJar
+# Repo: ecom360be (API). Independent from ecom360fe.
 # ──────────────────────────────────────────────────────────────
 name: CI
 
@@ -120,9 +119,15 @@ jobs:
       - name: Verify build artifact
         run: ./gradlew bootJar --no-daemon -x test
 
+      - name: Prepare JAR artifact
+        run: |
+          test -f build/libs/ecom360be.jar
+          mkdir -p dist
+          cp build/libs/ecom360be.jar dist/app.jar
+
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
-          path: build/libs/*.jar
+          path: dist/app.jar
           retention-days: 3

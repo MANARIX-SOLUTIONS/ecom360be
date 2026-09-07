@@ -23,6 +23,15 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
+// Stable artifact name for VPS/CD (avoids versioned + plain JARs)
+tasks.bootJar {
+    archiveFileName.set("ecom360be.jar")
+}
+
+tasks.jar {
+    enabled = false
+}
+
 configurations {
     compileOnly {
         extendsFrom(configurations.annotationProcessor.get())
