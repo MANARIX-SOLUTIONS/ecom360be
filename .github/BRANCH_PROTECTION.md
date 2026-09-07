@@ -35,5 +35,5 @@ hotfix/*  → main (fast-track with approval)
 ```
 
 - `develop`: integration branch, auto-deploys to **staging**
-- `main`: production-ready; deploy via Actions → **CD Backend** (manual)
+- `main`: production-ready; deploy via Actions → **CD** (manual)
 - `vX.Y.Z` tags: create GitHub Release; prod JAR deploy remains manual

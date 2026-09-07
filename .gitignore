@@ -1,6 +1,7 @@
 # ── Gradle / IDE copy ──
 .gradle/
 build/
+dist/
 bin/
 !gradle/wrapper/gradle-wrapper.jar
 
