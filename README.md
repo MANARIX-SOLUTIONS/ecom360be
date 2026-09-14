@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Engineering docs
+
+| Doc | Covers |
+|-----|--------|
+| [docs/catalog-products.md](docs/catalog-products.md) | Product/category CRUD, SKU uniqueness vs commerce import, `maxProducts`, store/stock coupling |
+
 ## License
 
 Proprietary - 360 PME Commerce
