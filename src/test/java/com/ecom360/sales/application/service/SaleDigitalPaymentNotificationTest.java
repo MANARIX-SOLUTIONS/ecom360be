@@ -34,6 +34,7 @@ class SaleDigitalPaymentNotificationTest {
         null,
         null,
         null,
+        null,
         notificationPublisher);
   }
 

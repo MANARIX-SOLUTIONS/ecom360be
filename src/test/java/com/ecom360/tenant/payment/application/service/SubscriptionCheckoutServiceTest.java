@@ -3,7 +3,7 @@ package com.ecom360.tenant.payment.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.ecom360.audit.application.service.AuditLogService;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.repository.UserRepository;
+import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.shared.domain.exception.AccessDeniedException;
 import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.tenant.application.service.SubscriptionService;
 import com.ecom360.tenant.domain.model.Invoice;
@@ -25,16 +27,20 @@ import com.ecom360.tenant.payment.domain.PaymentIntentNotFoundException;
 import com.ecom360.tenant.payment.domain.model.SubscriptionPaymentIntent;
 import com.ecom360.tenant.payment.domain.model.SubscriptionPaymentStatus;
 import com.ecom360.tenant.payment.domain.repository.SubscriptionPaymentIntentRepository;
-import com.ecom360.tenant.payment.infrastructure.config.PaydunyaProperties;
-import com.ecom360.tenant.payment.infrastructure.paydunya.PaydunyaClient;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysClient;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysProperties;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysStatusResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -54,13 +60,15 @@ class SubscriptionCheckoutServiceTest {
   @Mock
   UserRepository userRepository;
   @Mock
-  PaydunyaClient paydunyaClient;
+  BictorysClient bictorysClient;
   @Mock
   RolePermissionService permissionService;
   @Mock
   AuditLogService auditLogService;
+  @Mock
+  EntityManager entityManager;
 
-  PaydunyaProperties paydunyaProperties = new PaydunyaProperties();
+  BictorysProperties bictorysProperties = new BictorysProperties();
   SubscriptionCheckoutService service;
   ObjectMapper mapper = new ObjectMapper();
 
@@ -70,8 +78,7 @@ class SubscriptionCheckoutServiceTest {
 
   @BeforeEach
   void setUp() {
-    paydunyaProperties.setEnabled(true);
-    paydunyaProperties.setMasterKey("master");
+    bictorysProperties.setEnabled(true);
     service = new SubscriptionCheckoutService(
         intentRepository,
         subscriptionService,
@@ -79,18 +86,79 @@ class SubscriptionCheckoutServiceTest {
         businessRepository,
         invoiceRepository,
         userRepository,
-        paydunyaClient,
-        paydunyaProperties,
+        bictorysClient,
+        bictorysProperties,
         permissionService,
         auditLogService,
+        mapper,
+        entityManager,
         "http://localhost:5173");
   }
 
   @Test
-  void handlePaydunyaIpn_completed_activatesOnce_andIsIdempotent() {
+  void getCheckoutStatus_checksOwnershipWithoutLoadingIntentBeforeLock() {
     SubscriptionPaymentIntent intent = pendingIntent();
-    when(intentRepository.findByExternalTokenForUpdate("tok_1")).thenReturn(Optional.of(intent));
-    when(paydunyaClient.verifyMasterKeyHash(any())).thenReturn(true);
+    when(intentRepository.findBusinessIdById(intentId)).thenReturn(Optional.of(businessId));
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.of(intent));
+    when(intentRepository.findById(intentId)).thenReturn(Optional.of(intent));
+    when(bictorysClient.getStatus("tx_1")).thenReturn(new BictorysStatusResult("pending", null));
+    Plan plan = new Plan();
+    plan.setId(planId);
+    plan.setSlug("pro");
+    when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
+
+    service.getCheckoutStatus(intentId, principal());
+
+    InOrder order = inOrder(intentRepository);
+    order.verify(intentRepository).findBusinessIdById(intentId);
+    order.verify(intentRepository).findByIdForUpdate(intentId);
+    order.verify(intentRepository).findById(intentId);
+  }
+
+  @Test
+  void getCheckoutStatus_intentAlreadyPaidByWebhook_doesNotActivateAgain() {
+    SubscriptionPaymentIntent intent = pendingIntent();
+    intent.markPaid();
+    when(intentRepository.findBusinessIdById(intentId)).thenReturn(Optional.of(businessId));
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.of(intent));
+    when(intentRepository.findById(intentId)).thenReturn(Optional.of(intent));
+    Plan plan = new Plan();
+    plan.setId(planId);
+    plan.setSlug("pro");
+    when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
+
+    service.getCheckoutStatus(intentId, principal());
+
+    verify(bictorysClient, never()).getStatus(any());
+    verify(subscriptionService, never()).activatePaidPlan(any(), any(), any());
+  }
+
+  @Test
+  void getCheckoutStatus_otherBusiness_isDenied() {
+    when(intentRepository.findBusinessIdById(intentId)).thenReturn(Optional.of(UUID.randomUUID()));
+
+    assertThatThrownBy(() -> service.getCheckoutStatus(intentId, principal()))
+        .isInstanceOf(AccessDeniedException.class);
+    verify(intentRepository, never()).findByIdForUpdate(any());
+  }
+
+  @Test
+  void lockedIntent_isRefreshedWhenAlreadyManaged() {
+    SubscriptionPaymentIntent intent = pendingIntent();
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.of(intent));
+    when(entityManager.contains(intent)).thenReturn(true);
+    when(intentRepository.save(any(SubscriptionPaymentIntent.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    service.handleBictorysWebhook(webhook("failed", 25000));
+
+    verify(entityManager).refresh(intent, LockModeType.PESSIMISTIC_WRITE);
+  }
+
+  @Test
+  void handleBictorysWebhook_succeeded_activatesOnce_andIsIdempotent() {
+    SubscriptionPaymentIntent intent = pendingIntent();
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.of(intent));
 
     Plan plan = new Plan();
     plan.setId(planId);
@@ -115,10 +183,10 @@ class SubscriptionCheckoutServiceTest {
     when(intentRepository.save(any(SubscriptionPaymentIntent.class)))
         .thenAnswer(inv -> inv.getArgument(0));
 
-    ObjectNode data = completedIpn(25000);
+    ObjectNode payload = webhook("succeeded", 25000);
 
-    service.handlePaydunyaIpn(data);
-    service.handlePaydunyaIpn(data);
+    service.handleBictorysWebhook(payload);
+    service.handleBictorysWebhook(payload);
 
     verify(subscriptionService, times(1)).activatePaidPlan(businessId, "pro", "monthly");
     verify(invoiceRepository, times(1)).save(any(Invoice.class));
@@ -128,16 +196,13 @@ class SubscriptionCheckoutServiceTest {
   }
 
   @Test
-  void handlePaydunyaIpn_rejectsAmountMismatch() {
+  void handleBictorysWebhook_rejectsAmountMismatch() {
     SubscriptionPaymentIntent intent = pendingIntent();
-    when(intentRepository.findByExternalTokenForUpdate("tok_1")).thenReturn(Optional.of(intent));
-    when(paydunyaClient.verifyMasterKeyHash(any())).thenReturn(true);
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.of(intent));
     when(intentRepository.save(any(SubscriptionPaymentIntent.class)))
         .thenAnswer(inv -> inv.getArgument(0));
 
-    ObjectNode data = completedIpn(999);
-
-    assertThatThrownBy(() -> service.handlePaydunyaIpn(data))
+    assertThatThrownBy(() -> service.handleBictorysWebhook(webhook("succeeded", 999)))
         .isInstanceOf(BusinessRuleException.class)
         .hasMessageContaining("Montant");
     verify(subscriptionService, never()).activatePaidPlan(any(), any(), any());
@@ -145,41 +210,67 @@ class SubscriptionCheckoutServiceTest {
   }
 
   @Test
-  void handlePaydunyaIpn_unknownIntent_throwsForRetry() {
-    when(paydunyaClient.verifyMasterKeyHash(any())).thenReturn(true);
-    when(intentRepository.findByExternalTokenForUpdate("tok_missing")).thenReturn(Optional.empty());
+  void handleBictorysWebhook_failed_marksIntentFailed() {
+    SubscriptionPaymentIntent intent = pendingIntent();
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.of(intent));
+    when(intentRepository.save(any(SubscriptionPaymentIntent.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
 
-    ObjectNode data = mapper.createObjectNode();
-    data.put("hash", "abc");
-    data.put("status", "completed");
-    ObjectNode invoice = data.putObject("invoice");
-    invoice.put("token", "tok_missing");
-    invoice.put("total_amount", 25000);
+    service.handleBictorysWebhook(webhook("cancelled", 25000));
 
-    assertThatThrownBy(() -> service.handlePaydunyaIpn(data))
+    verify(subscriptionService, never()).activatePaidPlan(any(), any(), any());
+    assertThat(intent.getStatus()).isEqualTo(SubscriptionPaymentStatus.FAILED);
+  }
+
+  @Test
+  void handleBictorysWebhook_fallsBackToTransactionIdLookup() {
+    SubscriptionPaymentIntent intent = pendingIntent();
+    when(intentRepository.findByExternalTokenForUpdate("tx_1")).thenReturn(Optional.of(intent));
+    when(intentRepository.save(any(SubscriptionPaymentIntent.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    ObjectNode payload = webhook("failed", 25000);
+    payload.put("paymentReference", "not-a-uuid");
+
+    service.handleBictorysWebhook(payload);
+
+    assertThat(intent.getStatus()).isEqualTo(SubscriptionPaymentStatus.FAILED);
+  }
+
+  @Test
+  void handleBictorysWebhook_unknownIntent_throwsForRetry() {
+    when(intentRepository.findByIdForUpdate(intentId)).thenReturn(Optional.empty());
+    when(intentRepository.findByExternalTokenForUpdate("tx_1")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.handleBictorysWebhook(webhook("succeeded", 25000)))
         .isInstanceOf(PaymentIntentNotFoundException.class);
   }
 
   @Test
-  void handlePaydunyaIpn_rejectsInvalidHash() {
-    when(paydunyaClient.verifyMasterKeyHash(eq("bad"))).thenReturn(false);
-    ObjectNode data = mapper.createObjectNode();
-    data.put("hash", "bad");
-    data.put("status", "completed");
+  void fitCheckoutUrl_prefersLinkThenRedirectWithinColumnLimit() {
+    String longLink = "https://pay.example/" + "a".repeat(1000);
 
-    assertThatThrownBy(() -> service.handlePaydunyaIpn(data))
-        .hasMessageContaining("Hash");
-    verify(subscriptionService, never()).activatePaidPlan(any(), any(), any());
+    assertThat(SubscriptionCheckoutService.fitCheckoutUrl("https://l", "https://r"))
+        .isEqualTo("https://l");
+    assertThat(SubscriptionCheckoutService.fitCheckoutUrl(longLink, "https://r"))
+        .isEqualTo("https://r");
+    assertThat(SubscriptionCheckoutService.fitCheckoutUrl(null, longLink)).isNull();
   }
 
-  private ObjectNode completedIpn(int amount) {
-    ObjectNode data = mapper.createObjectNode();
-    data.put("hash", "abc");
-    data.put("status", "completed");
-    ObjectNode invoice = data.putObject("invoice");
-    invoice.put("token", "tok_1");
-    invoice.put("total_amount", amount);
-    return data;
+  private ObjectNode webhook(String status, int amount) {
+    ObjectNode payload = mapper.createObjectNode();
+    payload.put("id", "tx_1");
+    payload.put("type", "payment");
+    payload.put("status", status);
+    payload.put("amount", amount);
+    payload.put("currency", "XOF");
+    payload.put("paymentReference", intentId.toString());
+    payload.put("pspName", "wave_money");
+    return payload;
+  }
+
+  private UserPrincipal principal() {
+    return new UserPrincipal(UUID.randomUUID(), "owner@test.sn", businessId, "OWNER", null, false);
   }
 
   private SubscriptionPaymentIntent pendingIntent() {
@@ -190,10 +281,10 @@ class SubscriptionCheckoutServiceTest {
     intent.setBillingCycle("monthly");
     intent.setAmount(25000);
     intent.setCurrency("XOF");
-    intent.setProvider("paydunya");
+    intent.setProvider("bictorys");
     intent.setPreferredChannel("wave");
     intent.setStatus(SubscriptionPaymentStatus.PENDING);
-    intent.setExternalToken("tok_1");
+    intent.setExternalToken("tx_1");
     return intent;
   }
 }

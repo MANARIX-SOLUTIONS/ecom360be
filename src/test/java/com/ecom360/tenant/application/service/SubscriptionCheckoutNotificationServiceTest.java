@@ -75,20 +75,20 @@ class SubscriptionCheckoutNotificationServiceTest {
                 eq(businessId),
                 eq(NotificationTypes.SUBSCRIPTION),
                 eq("Paiement d’abonnement échoué"),
-                eq("Montant PayDunya incorrect."),
+                eq("Montant payé incorrect."),
                 eq("/settings/subscription"),
                 eq(Permission.SUBSCRIPTION_READ)))
                 .thenReturn(List.of(userId));
         User user = User.create("Ada", "ada@example.com", "hash", null);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        service.notifyFailed(businessId, "Montant PayDunya incorrect.");
+        service.notifyFailed(businessId, "Montant payé incorrect.");
 
         verify(emailService)
                 .sendSubscriptionCheckoutFailedEmail(
                         eq("ada@example.com"),
                         eq("Ada"),
-                        eq("Montant PayDunya incorrect."),
+                        eq("Montant payé incorrect."),
                         eq("https://app.example/settings/subscription"));
     }
 }
