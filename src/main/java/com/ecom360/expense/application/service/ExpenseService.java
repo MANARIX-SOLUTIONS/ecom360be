@@ -8,6 +8,7 @@ import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -48,7 +49,7 @@ public class ExpenseService {
                     "Suivi des dépenses non inclus dans votre plan. Passez à un plan supérieur.");
               }
             });
-    if (catRepo.existsByBusinessIdAndName(p.businessId(), r.name()))
+    if (catRepo.existsByBusinessIdAndNameAndIsActiveTrue(p.businessId(), r.name()))
       throw new ResourceAlreadyExistsException("Expense category", r.name());
     ExpenseCategory c = new ExpenseCategory();
     c.setBusinessId(p.businessId());
@@ -61,7 +62,7 @@ public class ExpenseService {
   public List<ExpenseCategoryResponse> listCategories(UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.EXPENSES_READ);
-    return catRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
+    return catRepo.findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(p.businessId()).stream()
         .map(this::mapCat)
         .toList();
   }
@@ -74,6 +75,10 @@ public class ExpenseService {
         catRepo
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Expense category", id));
+    if (!c.getName().equals(r.name())
+        && catRepo.existsByBusinessIdAndNameAndIsActiveTrue(p.businessId(), r.name())) {
+      throw new ResourceAlreadyExistsException("Expense category", r.name());
+    }
     c.setName(r.name());
     c.setColor(r.color());
     c.setSortOrder(r.sortOrder());
@@ -87,12 +92,8 @@ public class ExpenseService {
         catRepo
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Expense category", id));
-    long expenseCount = expenseRepo.countByBusinessIdAndCategoryId(p.businessId(), id);
-    if (expenseCount > 0) {
-      throw new BusinessRuleException(
-          "Impossible de supprimer cette catégorie : " + expenseCount + " dépense(s) l'utilisent.");
-    }
-    catRepo.delete(c);
+    c.setIsActive(false);
+    catRepo.save(c);
   }
 
   // ── Expenses ──
@@ -108,9 +109,7 @@ public class ExpenseService {
                     "Suivi des dépenses non inclus dans votre plan. Passez à un plan supérieur.");
               }
             });
-    catRepo
-        .findByBusinessIdAndId(p.businessId(), r.categoryId())
-        .orElseThrow(() -> new ResourceNotFoundException("Expense category", r.categoryId()));
+    requireActiveCategory(r.categoryId(), p);
     Expense e = new Expense();
     e.setBusinessId(p.businessId());
     e.setUserId(p.userId());
@@ -203,6 +202,9 @@ public class ExpenseService {
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Expense", id));
     assertExpenseInRetention(p, e);
+    if (!r.categoryId().equals(e.getCategoryId())) {
+      requireActiveCategory(r.categoryId(), p);
+    }
     e.setStoreId(r.storeId());
     e.setCategoryId(r.categoryId());
     e.setAmount(r.amount());
@@ -220,7 +222,15 @@ public class ExpenseService {
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Expense", id));
     assertExpenseInRetention(p, e);
-    expenseRepo.delete(e);
+    e.setDeletedAt(Instant.now());
+    expenseRepo.save(e);
+  }
+
+  private void requireActiveCategory(UUID categoryId, UserPrincipal p) {
+    catRepo
+        .findByBusinessIdAndId(p.businessId(), categoryId)
+        .filter(cat -> Boolean.TRUE.equals(cat.getIsActive()))
+        .orElseThrow(() -> new ResourceNotFoundException("Expense category", categoryId));
   }
 
   private LocalDate expenseRetentionMin(UserPrincipal p) {

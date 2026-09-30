@@ -1,5 +1,6 @@
 package com.ecom360.supplier.application.service;
 
+import com.ecom360.audit.application.service.AuditLogService;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
@@ -8,6 +9,7 @@ import com.ecom360.supplier.application.dto.*;
 import com.ecom360.supplier.domain.model.*;
 import com.ecom360.supplier.domain.repository.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,18 +23,21 @@ public class SupplierService {
   private final PurchaseOrderPaymentAllocationService allocationService;
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
+  private final AuditLogService auditLogService;
 
   public SupplierService(
       SupplierRepository supplierRepo,
       SupplierPaymentRepository paymentRepo,
       PurchaseOrderPaymentAllocationService allocationService,
       SubscriptionService subscriptionService,
-      RolePermissionService permissionService) {
+      RolePermissionService permissionService,
+      AuditLogService auditLogService) {
     this.supplierRepo = supplierRepo;
     this.paymentRepo = paymentRepo;
     this.allocationService = allocationService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
+    this.auditLogService = auditLogService;
   }
 
   public SupplierResponse create(SupplierRequest r, UserPrincipal p) {
@@ -43,7 +48,7 @@ public class SupplierService {
         .ifPresent(
             plan -> {
               if (!plan.isUnlimited(plan.getMaxSuppliers())) {
-                long count = supplierRepo.countByBusinessId(p.businessId());
+                long count = supplierRepo.countByBusinessIdAndIsActive(p.businessId(), true);
                 if (count >= plan.getMaxSuppliers()) {
                   throw new BusinessRuleException(
                       "Limite du plan atteinte : maximum "
@@ -92,10 +97,15 @@ public class SupplierService {
     return map(supplierRepo.save(s));
   }
 
+  @Transactional
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUPPLIERS_DELETE);
-    supplierRepo.delete(find(id, p));
+    Supplier s = find(id, p);
+    s.setIsActive(false);
+    supplierRepo.save(s);
+    auditLogService.logAsync(
+        p.businessId(), p.userId(), "DELETE", "Supplier", id, Map.of("name", s.getName()));
   }
 
   @Transactional
@@ -138,14 +148,15 @@ public class SupplierService {
     return paymentRepo
         .findBySupplierIdOrderByCreatedAtDesc(supplierId, pg)
         .map(
-            pay -> new SupplierPaymentResponse(
-                pay.getId(),
-                pay.getSupplierId(),
-                pay.getUserId(),
-                pay.getAmount(),
-                pay.getPaymentMethod(),
-                pay.getNote(),
-                pay.getCreatedAt()));
+            pay ->
+                new SupplierPaymentResponse(
+                    pay.getId(),
+                    pay.getSupplierId(),
+                    pay.getUserId(),
+                    pay.getAmount(),
+                    pay.getPaymentMethod(),
+                    pay.getNote(),
+                    pay.getCreatedAt()));
   }
 
   private Supplier find(UUID id, UserPrincipal p) {
@@ -155,8 +166,7 @@ public class SupplierService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private SupplierResponse map(Supplier s) {

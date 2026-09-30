@@ -3,7 +3,6 @@ package com.ecom360.catalog.application.service;
 import com.ecom360.catalog.application.dto.*;
 import com.ecom360.catalog.domain.model.Category;
 import com.ecom360.catalog.domain.repository.CategoryRepository;
-import com.ecom360.catalog.domain.repository.ProductRepository;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
@@ -16,17 +15,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class CategoryService {
   private final CategoryRepository repo;
-  private final ProductRepository productRepo;
   private final RolePermissionService permissionService;
   private final CachedLookups cachedLookups;
 
   public CategoryService(
       CategoryRepository repo,
-      ProductRepository productRepo,
       RolePermissionService permissionService,
       CachedLookups cachedLookups) {
     this.repo = repo;
-    this.productRepo = productRepo;
     this.permissionService = permissionService;
     this.cachedLookups = cachedLookups;
   }
@@ -34,7 +30,7 @@ public class CategoryService {
   public CategoryResponse create(CategoryRequest r, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.CATEGORIES_CREATE);
-    if (repo.existsByBusinessIdAndName(p.businessId(), r.name()))
+    if (repo.existsByBusinessIdAndNameAndIsActiveTrue(p.businessId(), r.name()))
       throw new ResourceAlreadyExistsException("Category", r.name());
     Category c = new Category();
     c.setBusinessId(p.businessId());
@@ -62,7 +58,8 @@ public class CategoryService {
     requireBiz(p);
     permissionService.require(p, Permission.CATEGORIES_UPDATE);
     Category c = find(id, p);
-    if (!c.getName().equals(r.name()) && repo.existsByBusinessIdAndName(p.businessId(), r.name()))
+    if (!c.getName().equals(r.name())
+        && repo.existsByBusinessIdAndNameAndIsActiveTrue(p.businessId(), r.name()))
       throw new ResourceAlreadyExistsException("Category", r.name());
     c.setName(r.name());
     c.setColor(r.color());
@@ -76,12 +73,8 @@ public class CategoryService {
     requireBiz(p);
     permissionService.require(p, Permission.CATEGORIES_DELETE);
     Category c = find(id, p);
-    long productCount = productRepo.countByBusinessIdAndCategoryIdAndIsActive(p.businessId(), id, true);
-    if (productCount > 0) {
-      throw new BusinessRuleException(
-          "Impossible de supprimer cette catégorie : " + productCount + " produit(s) l'utilisent.");
-    }
-    repo.delete(c);
+    c.setIsActive(false);
+    repo.save(c);
     cachedLookups.evictCategories(p.businessId());
   }
 
@@ -92,8 +85,7 @@ public class CategoryService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private CategoryResponse map(Category c) {

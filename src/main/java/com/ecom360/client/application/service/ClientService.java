@@ -1,5 +1,6 @@
 package com.ecom360.client.application.service;
 
+import com.ecom360.audit.application.service.AuditLogService;
 import com.ecom360.client.application.dto.*;
 import com.ecom360.client.domain.ClientCreditPolicy;
 import com.ecom360.client.domain.model.*;
@@ -7,11 +8,12 @@ import com.ecom360.client.domain.repository.*;
 import com.ecom360.identity.application.service.RolePermissionService;
 import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
-import com.ecom360.sales.application.service.SalePaymentAllocationService;
 import com.ecom360.notification.application.service.NotificationPublisher;
 import com.ecom360.notification.application.service.NotificationTypes;
+import com.ecom360.sales.application.service.SalePaymentAllocationService;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.tenant.application.service.SubscriptionService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,7 @@ public class ClientService {
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
   private final NotificationPublisher notificationPublisher;
+  private final AuditLogService auditLogService;
 
   public ClientService(
       ClientRepository clientRepo,
@@ -34,13 +37,15 @@ public class ClientService {
       SalePaymentAllocationService allocationService,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService,
-      NotificationPublisher notificationPublisher) {
+      NotificationPublisher notificationPublisher,
+      AuditLogService auditLogService) {
     this.clientRepo = clientRepo;
     this.paymentRepo = paymentRepo;
     this.allocationService = allocationService;
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
     this.notificationPublisher = notificationPublisher;
+    this.auditLogService = auditLogService;
   }
 
   public ClientResponse create(ClientRequest r, UserPrincipal p) {
@@ -51,7 +56,7 @@ public class ClientService {
         .ifPresent(
             plan -> {
               if (!plan.isUnlimited(plan.getMaxClients())) {
-                long count = clientRepo.countByBusinessId(p.businessId());
+                long count = clientRepo.countByBusinessIdAndIsActive(p.businessId(), true);
                 if (count >= plan.getMaxClients()) {
                   throw new BusinessRuleException(
                       "Limite du plan atteinte : maximum "
@@ -100,10 +105,15 @@ public class ClientService {
     return map(clientRepo.save(c));
   }
 
+  @Transactional
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.CLIENTS_DELETE);
-    clientRepo.delete(find(id, p));
+    Client c = find(id, p);
+    c.setIsActive(false);
+    clientRepo.save(c);
+    auditLogService.logAsync(
+        p.businessId(), p.userId(), "DELETE", "Client", id, Map.of("name", c.getName()));
   }
 
   @Transactional
@@ -140,10 +150,7 @@ public class ClientService {
         p.businessId(),
         NotificationTypes.PAYMENT_RECEIVED,
         "Paiement client reçu",
-        pay.getAmount()
-            + " FCFA reçus de "
-            + c.getName()
-            + ".",
+        pay.getAmount() + " FCFA reçus de " + c.getName() + ".",
         "/clients/" + clientId,
         Permission.CLIENTS_READ,
         Permission.SALES_READ);
@@ -165,15 +172,16 @@ public class ClientService {
     return paymentRepo
         .findByClientIdOrderByCreatedAtDesc(clientId, pg)
         .map(
-            pay -> new ClientPaymentResponse(
-                pay.getId(),
-                pay.getClientId(),
-                pay.getStoreId(),
-                pay.getUserId(),
-                pay.getAmount(),
-                pay.getPaymentMethod(),
-                pay.getNote(),
-                pay.getCreatedAt()));
+            pay ->
+                new ClientPaymentResponse(
+                    pay.getId(),
+                    pay.getClientId(),
+                    pay.getStoreId(),
+                    pay.getUserId(),
+                    pay.getAmount(),
+                    pay.getPaymentMethod(),
+                    pay.getNote(),
+                    pay.getCreatedAt()));
   }
 
   private Client find(UUID id, UserPrincipal p) {
@@ -183,8 +191,7 @@ public class ClientService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private ClientResponse map(Client c) {

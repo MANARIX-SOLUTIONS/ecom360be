@@ -23,8 +23,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 
 /**
- * Cacheable reads isolated from auth checks. Callers must authorize before
- * invoking these methods
+ * Cacheable reads isolated from auth checks. Callers must authorize before invoking these methods
  * so Spring AOP cache hits never skip permission enforcement.
  */
 @Component
@@ -51,7 +50,7 @@ public class CachedLookups {
 
   @Cacheable(value = "categories", key = "#businessId")
   public List<CategoryResponse> categoriesByBusiness(UUID businessId) {
-    return categoryRepo.findByBusinessIdOrderBySortOrderAsc(businessId).stream()
+    return categoryRepo.findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(businessId).stream()
         .map(this::mapCategory)
         .toList();
   }
@@ -63,9 +62,7 @@ public class CachedLookups {
 
   @Cacheable(value = "plans", key = "'active'")
   public List<PlanResponse> activePlans() {
-    return planRepo.findByIsActiveTrueOrderByPriceMonthlyAsc().stream()
-        .map(this::mapPlan)
-        .toList();
+    return planRepo.findByIsActiveTrueOrderByPriceMonthlyAsc().stream().map(this::mapPlan).toList();
   }
 
   @Cacheable(value = "stores", key = "#businessId + ':' + #userId")
@@ -73,9 +70,10 @@ public class CachedLookups {
     List<Store> all = storeRepo.findByBusinessIdAndIsActive(businessId, true);
     Optional<BusinessUser> bu = businessUserRepo.findByBusinessIdAndUserId(businessId, userId);
     if (bu.isPresent()) {
-      Set<UUID> assignedIds = businessUserStoreRepo.findByBusinessUserId(bu.get().getId()).stream()
-          .map(BusinessUserStore::getStoreId)
-          .collect(Collectors.toSet());
+      Set<UUID> assignedIds =
+          businessUserStoreRepo.findByBusinessUserId(bu.get().getId()).stream()
+              .map(BusinessUserStore::getStoreId)
+              .collect(Collectors.toSet());
       if (!assignedIds.isEmpty()) {
         all = all.stream().filter(s -> assignedIds.contains(s.getId())).toList();
       }

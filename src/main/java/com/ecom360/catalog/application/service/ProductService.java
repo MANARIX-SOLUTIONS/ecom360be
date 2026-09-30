@@ -72,16 +72,14 @@ public class ProductService {
             });
     if (r.sku() != null
         && !r.sku().isBlank()
-        && productRepo.existsByBusinessIdAndSku(p.businessId(), r.sku()))
+        && productRepo.existsByBusinessIdAndSkuAndIsActiveTrue(p.businessId(), r.sku()))
       throw new ResourceAlreadyExistsException("Product with SKU", r.sku());
-    if (r.categoryId() != null
-        && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
-            .noneMatch(c -> c.getId().equals(r.categoryId())))
-      throw new ResourceNotFoundException("Category", r.categoryId());
-    Store store = storeRepository
-        .findById(r.storeId())
-        .filter(s -> s.belongsTo(p.businessId()))
-        .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+    assertAssignableCategory(r.categoryId(), null, p);
+    Store store =
+        storeRepository
+            .findById(r.storeId())
+            .filter(s -> s.belongsTo(p.businessId()))
+            .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
     Product prod = new Product();
     prod.setBusinessId(p.businessId());
     prod.setStoreId(store.getId());
@@ -115,19 +113,22 @@ public class ProductService {
     Page<Product> page;
     boolean shared = sharedCatalogStockService.isSharedCatalog(p.businessId());
     if (storeId != null && !shared) {
-      Store store = storeRepository
-          .findById(storeId)
-          .filter(s -> s.belongsTo(p.businessId()))
-          .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
-      page = (search != null && !search.isBlank())
-          ? productRepo.searchByBusinessIdAndStoreId(
-              p.businessId(), store.getId(), search.trim(), pg)
-          : productRepo.findByBusinessIdAndStoreIdAndIsActive(
-              p.businessId(), store.getId(), true, pg);
+      Store store =
+          storeRepository
+              .findById(storeId)
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+      page =
+          (search != null && !search.isBlank())
+              ? productRepo.searchByBusinessIdAndStoreId(
+                  p.businessId(), store.getId(), search.trim(), pg)
+              : productRepo.findByBusinessIdAndStoreIdAndIsActive(
+                  p.businessId(), store.getId(), true, pg);
     } else {
-      page = (search != null && !search.isBlank())
-          ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
-          : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
+      page =
+          (search != null && !search.isBlank())
+              ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
+              : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
     }
     return page.map(this::map);
   }
@@ -140,25 +141,22 @@ public class ProductService {
     if (r.sku() != null
         && !r.sku().isBlank()
         && !r.sku().equals(prod.getSku())
-        && productRepo.existsByBusinessIdAndSku(p.businessId(), r.sku()))
+        && productRepo.existsByBusinessIdAndSkuAndIsActiveTrue(p.businessId(), r.sku()))
       throw new ResourceAlreadyExistsException("Product with SKU", r.sku());
-    if (r.categoryId() != null
-        && categoryRepo.findByBusinessIdOrderBySortOrderAsc(p.businessId()).stream()
-            .noneMatch(c -> c.getId().equals(r.categoryId())))
-      throw new ResourceNotFoundException("Category", r.categoryId());
+    assertAssignableCategory(r.categoryId(), prod.getCategoryId(), p);
     if (r.storeId() != null
         && !r.storeId().equals(prod.getStoreId())
         && !sharedCatalogStockService.isSharedCatalog(p.businessId())) {
-      Store store = storeRepository
-          .findById(r.storeId())
-          .filter(s -> s.belongsTo(p.businessId()))
-          .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+      Store store =
+          storeRepository
+              .findById(r.storeId())
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
       prod.setStoreId(store.getId());
     }
     String previousImageUrl = prod.getImageUrl();
     applyFields(prod, r);
-    if (previousImageUrl != null
-        && (r.imageUrl() == null || r.imageUrl().isBlank())) {
+    if (previousImageUrl != null && (r.imageUrl() == null || r.imageUrl().isBlank())) {
       productImageStorageService.deleteManagedImageIfPresent(p.businessId(), previousImageUrl);
     }
     Product saved = productRepo.save(prod);
@@ -198,6 +196,18 @@ public class ProductService {
     productRepo.save(prod);
   }
 
+  private void assertAssignableCategory(UUID categoryId, UUID currentCategoryId, UserPrincipal p) {
+    if (categoryId == null || categoryId.equals(currentCategoryId)) {
+      return;
+    }
+    boolean active =
+        categoryRepo.findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(p.businessId()).stream()
+            .anyMatch(c -> c.getId().equals(categoryId));
+    if (!active) {
+      throw new ResourceNotFoundException("Category", categoryId);
+    }
+  }
+
   private Product find(UUID id, UserPrincipal p) {
     return productRepo
         .findByBusinessIdAndId(p.businessId(), id)
@@ -205,8 +215,7 @@ public class ProductService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private void applyFields(Product prod, ProductRequest r) {

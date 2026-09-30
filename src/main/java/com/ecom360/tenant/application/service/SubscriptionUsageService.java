@@ -76,10 +76,10 @@ public class SubscriptionUsageService {
 
   private SubscriptionUsageResponse computeUsage(UUID businessId) {
     int usersCount = businessUserRepository.findByBusinessIdAndIsActive(businessId, true).size();
-    int storesCount = storeRepository.findByBusinessId(businessId).size();
-    long productsCount = productRepository.countByBusinessId(businessId);
-    long clientsCount = clientRepository.countByBusinessId(businessId);
-    long suppliersCount = supplierRepository.countByBusinessId(businessId);
+    int storesCount = storeRepository.findByBusinessIdAndIsActive(businessId, true).size();
+    long productsCount = productRepository.countByBusinessIdAndIsActive(businessId, true);
+    long clientsCount = clientRepository.countByBusinessIdAndIsActive(businessId, true);
+    long suppliersCount = supplierRepository.countByBusinessIdAndIsActive(businessId, true);
 
     ZoneId zone = ZoneId.systemDefault();
     LocalDate now = LocalDate.now(zone);

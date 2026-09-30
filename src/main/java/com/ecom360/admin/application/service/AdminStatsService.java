@@ -116,7 +116,9 @@ public class AdminStatsService {
     Map<UUID, String> planMap = loadPlans(topBizIds);
     Map<UUID, Integer> storesMap =
         topBizIds.stream()
-            .collect(Collectors.toMap(id -> id, id -> storeRepository.findByBusinessId(id).size()));
+            .collect(
+                Collectors.toMap(
+                    id -> id, id -> storeRepository.findByBusinessIdAndIsActive(id, true).size()));
 
     List<AdminStatsResponse.TopBusiness> result = new ArrayList<>();
     for (UUID bizId : topBizIds) {

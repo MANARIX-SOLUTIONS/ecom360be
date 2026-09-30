@@ -119,7 +119,8 @@ public class CourierService {
     requireBiz(p);
     permissionService.require(p, Permission.DELIVERY_COURIERS_CREATE);
     requireDeliveryCouriersPlan(p);
-    if (courierRepo.existsByBusinessIdAndNameIgnoreCase(p.businessId(), req.name())) {
+    if (courierRepo.existsByBusinessIdAndNameIgnoreCaseAndIsActiveTrue(
+        p.businessId(), req.name())) {
       throw new ResourceAlreadyExistsException("Livreur", req.name());
     }
     Courier c = new Courier();
@@ -154,7 +155,8 @@ public class CourierService {
         courierRepo
             .findByBusinessIdAndId(p.businessId(), id)
             .orElseThrow(() -> new ResourceNotFoundException("Livreur", id));
-    courierRepo.delete(c);
+    c.setIsActive(false);
+    courierRepo.save(c);
   }
 
   private CourierResponse toResponse(Courier c) {

@@ -5,6 +5,7 @@ import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.application.service.SharedCatalogStockService;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
+import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.shared.infrastructure.cache.CachedLookups;
 import com.ecom360.store.application.dto.StoreRequest;
@@ -43,7 +44,7 @@ public class StoreService {
     requireBiz(p);
     permissionService.require(p, Permission.STORES_CREATE);
     subscriptionService.assertCanAddStore(
-        p.businessId(), storeRepository.findByBusinessId(p.businessId()).size());
+        p.businessId(), storeRepository.findByBusinessIdAndIsActive(p.businessId(), true).size());
     Store s = Store.create(p.businessId(), req.name(), req.address(), req.phone());
     Store saved = storeRepository.save(s);
     if (sharedCatalogStockService.isSharedCatalog(p.businessId())) {
@@ -78,10 +79,17 @@ public class StoreService {
     return updated;
   }
 
+  @Transactional
   public void delete(UUID id, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.STORES_DELETE);
-    storeRepository.delete(find(id, p));
+    Store s = find(id, p);
+    long active = storeRepository.findByBusinessIdAndIsActive(p.businessId(), true).size();
+    if (Boolean.TRUE.equals(s.getIsActive()) && active <= 1) {
+      throw new BusinessRuleException("Impossible de supprimer le dernier magasin actif.");
+    }
+    s.deactivate();
+    storeRepository.save(s);
     cachedLookups.evictAllStores();
   }
 
@@ -93,8 +101,7 @@ public class StoreService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private StoreResponse map(Store s) {

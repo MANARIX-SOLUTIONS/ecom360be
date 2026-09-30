@@ -11,7 +11,9 @@ import org.springframework.stereotype.Repository;
 public interface ExpenseCategoryRepository extends JpaRepository<ExpenseCategory, UUID> {
   List<ExpenseCategory> findByBusinessIdOrderBySortOrderAsc(UUID bId);
 
+  List<ExpenseCategory> findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(UUID bId);
+
   Optional<ExpenseCategory> findByBusinessIdAndId(UUID bId, UUID id);
 
-  boolean existsByBusinessIdAndName(UUID bId, String name);
+  boolean existsByBusinessIdAndNameAndIsActiveTrue(UUID bId, String name);
 }

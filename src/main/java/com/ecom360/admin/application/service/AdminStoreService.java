@@ -2,6 +2,7 @@ package com.ecom360.admin.application.service;
 
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.shared.domain.exception.AccessDeniedException;
+import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.shared.domain.exception.ResourceNotFoundException;
 import com.ecom360.shared.infrastructure.cache.CachedLookups;
 import com.ecom360.store.application.dto.StoreRequest;
@@ -49,7 +50,7 @@ public class AdminStoreService {
         .findById(businessId)
         .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
     subscriptionService.assertCanAddStore(
-        businessId, storeRepository.findByBusinessId(businessId).size());
+        businessId, storeRepository.findByBusinessIdAndIsActive(businessId, true).size());
     Store s = Store.create(businessId, req.name(), req.address(), req.phone());
     StoreResponse created = map(storeRepository.save(s));
     cachedLookups.evictAllStores();
@@ -78,7 +79,13 @@ public class AdminStoreService {
     businessRepository
         .findById(businessId)
         .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
-    storeRepository.delete(findStore(businessId, storeId));
+    Store s = findStore(businessId, storeId);
+    long active = storeRepository.findByBusinessIdAndIsActive(businessId, true).size();
+    if (Boolean.TRUE.equals(s.getIsActive()) && active <= 1) {
+      throw new BusinessRuleException("Impossible de supprimer le dernier magasin actif.");
+    }
+    s.deactivate();
+    storeRepository.save(s);
     cachedLookups.evictAllStores();
   }
 

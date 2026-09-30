@@ -2,11 +2,14 @@ package com.ecom360.expense.domain.model;
 
 import com.ecom360.shared.domain.model.BaseEntity;
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Table(name = "expense")
+@SQLRestriction("deleted_at IS NULL")
 public class Expense extends BaseEntity {
   @Column(name = "business_id", nullable = false)
   private UUID businessId;
@@ -31,6 +34,9 @@ public class Expense extends BaseEntity {
 
   @Column(name = "receipt_url")
   private String receiptUrl;
+
+  @Column(name = "deleted_at")
+  private Instant deletedAt;
 
   public UUID getBusinessId() {
     return businessId;
@@ -94,5 +100,13 @@ public class Expense extends BaseEntity {
 
   public void setReceiptUrl(String v) {
     this.receiptUrl = v;
+  }
+
+  public Instant getDeletedAt() {
+    return deletedAt;
+  }
+
+  public void setDeletedAt(Instant v) {
+    this.deletedAt = v;
   }
 }

@@ -10,5 +10,7 @@ import org.springframework.stereotype.Repository;
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
   List<Category> findByBusinessIdOrderBySortOrderAsc(UUID businessId);
 
-  boolean existsByBusinessIdAndName(UUID businessId, String name);
+  List<Category> findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(UUID businessId);
+
+  boolean existsByBusinessIdAndNameAndIsActiveTrue(UUID businessId, String name);
 }
