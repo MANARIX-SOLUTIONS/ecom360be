@@ -18,9 +18,7 @@ public record ProductRequest(
     @Min(0) Integer initialStock,
     @Min(0) Integer minStock) {
   public ProductRequest {
-    if (unit == null || unit.isBlank())
-      unit = "pièce";
-    if (isActive == null)
-      isActive = true;
+    if (unit == null || unit.isBlank()) unit = "pièce";
+    if (isActive == null) isActive = true;
   }
 }

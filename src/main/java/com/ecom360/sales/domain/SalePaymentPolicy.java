@@ -5,9 +5,9 @@ import com.ecom360.sales.domain.model.Sale;
 import com.ecom360.shared.domain.exception.BusinessRuleException;
 
 /**
- * Règles du paiement par acompte : une vente peut n'être encaissée que
- * partiellement, le solde devient une créance sur un client nominatif. La vente à
- * crédit est le cas particulier d'un acompte à 0.
+ * Règles du paiement par acompte : une vente peut n'être encaissée que partiellement, le solde
+ * devient une créance sur un client nominatif. La vente à crédit est le cas particulier d'un
+ * acompte à 0.
  */
 public final class SalePaymentPolicy {
 
@@ -39,10 +39,7 @@ public final class SalePaymentPolicy {
     }
   }
 
-  /**
-   * Un reste à payer est une créance : il exige un client identifié, jamais le
-   * client comptoir.
-   */
+  /** Un reste à payer est une créance : il exige un client identifié, jamais le client comptoir. */
   public static void requireNamedClientForOutstanding(int remaining, Client client) {
     if (remaining <= 0) {
       return;

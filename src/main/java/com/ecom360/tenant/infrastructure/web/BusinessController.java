@@ -45,7 +45,8 @@ public class BusinessController {
   @PatchMapping("/me/catalog-mode")
   @Operation(summary = "Choisir catalogue partagé ou catalogue par boutique")
   public ResponseEntity<BusinessProfileResponse> updateCatalogMode(
-      @Valid @RequestBody BusinessCatalogModeRequest req, @AuthenticationPrincipal UserPrincipal p) {
+      @Valid @RequestBody BusinessCatalogModeRequest req,
+      @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(businessProfileService.updateCatalogMode(req, p));
   }
 

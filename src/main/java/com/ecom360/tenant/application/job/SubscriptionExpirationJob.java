@@ -48,8 +48,7 @@ public class SubscriptionExpirationJob {
       sub.expire();
       subscriptionRepository.save(sub);
       syncBusinessStatusOnExpiration(sub.getBusinessId(), wasTrialing);
-      expirationNotificationService.notifyExpired(
-          sub.getBusinessId(), wasTrialing, periodEnd);
+      expirationNotificationService.notifyExpired(sub.getBusinessId(), wasTrialing, periodEnd);
       log.info(
           "Expired subscription {} (business={}, wasTrialing={})",
           sub.getId(),

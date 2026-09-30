@@ -126,9 +126,8 @@ public class WebhookService {
   }
 
   /**
-   * Envoie un événement {@code webhook.test} vers l'URL configurée (sans
-   * signature —
-   * le secret n'est pas stocké en clair). Redirections désactivées ; IP épinglée.
+   * Envoie un événement {@code webhook.test} vers l'URL configurée (sans signature — le secret
+   * n'est pas stocké en clair). Redirections désactivées ; IP épinglée.
    */
   public WebhookTestResponse sendTest(UUID id, UserPrincipal p) {
     requireBiz(p);
@@ -166,9 +165,8 @@ public class WebhookService {
   }
 
   /**
-   * Valide l'URL (create/update/test) : schéma http(s), pas d'userinfo, toutes
-   * les IP
-   * résolues publiques. Retourne l'URI normalisée.
+   * Valide l'URL (create/update/test) : schéma http(s), pas d'userinfo, toutes les IP résolues
+   * publiques. Retourne l'URI normalisée.
    */
   static URI validateOutboundUrl(String url) {
     URI uri;
@@ -178,8 +176,7 @@ public class WebhookService {
       throw new BusinessRuleException("URL webhook invalide");
     }
     String scheme = uri.getScheme();
-    if (scheme == null
-        || (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme))) {
+    if (scheme == null || (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme))) {
       throw new BusinessRuleException("L'URL webhook doit commencer par http:// ou https://");
     }
     if (uri.getUserInfo() != null) {
@@ -255,19 +252,15 @@ public class WebhookService {
       int a0 = b[0] & 0xff;
       int a1 = b[1] & 0xff;
       // 100.64.0.0/10 (CGNAT)
-      if (a0 == 100 && a1 >= 64 && a1 <= 127)
-        return true;
+      if (a0 == 100 && a1 >= 64 && a1 <= 127) return true;
       // 169.254.0.0/16 (link-local / cloud metadata)
-      if (a0 == 169 && a1 == 254)
-        return true;
+      if (a0 == 169 && a1 == 254) return true;
       // 0.0.0.0/8
-      if (a0 == 0)
-        return true;
+      if (a0 == 0) return true;
     }
     if (b.length == 16) {
       // fc00::/7 unique local
-      if ((b[0] & 0xfe) == 0xfc)
-        return true;
+      if ((b[0] & 0xfe) == 0xfc) return true;
       // fe80::/10 link-local already covered by isLinkLocalAddress
     }
     return false;
@@ -308,7 +301,6 @@ public class WebhookService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 }

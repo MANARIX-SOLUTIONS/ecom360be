@@ -68,35 +68,34 @@ public class PaydunyaClient {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("invoice", invoice);
     body.put("store", Map.of("name", properties.getStoreName()));
-    body.put(
-        "custom_data",
-        Map.of(
-            "intent_id", intentId.toString(),
-            "channel", channel));
+    body.put("custom_data", Map.of("intent_id", intentId.toString(), "channel", channel));
     body.put(
         "actions",
         Map.of(
-            "callback_url", callbackUrl(),
-            "return_url", returnUrl,
-            "cancel_url", cancelUrl != null ? cancelUrl : returnUrl));
+            "callback_url",
+            callbackUrl(),
+            "return_url",
+            returnUrl,
+            "cancel_url",
+            cancelUrl != null ? cancelUrl : returnUrl));
 
     String url = apiRoot() + "/checkout-invoice/create";
     try {
-      String raw = restClient
-          .post()
-          .uri(url)
-          .contentType(MediaType.APPLICATION_JSON)
-          .headers(this::authHeaders)
-          .body(body)
-          .retrieve()
-          .body(String.class);
+      String raw =
+          restClient
+              .post()
+              .uri(url)
+              .contentType(MediaType.APPLICATION_JSON)
+              .headers(this::authHeaders)
+              .body(body)
+              .retrieve()
+              .body(String.class);
       JsonNode root = objectMapper.readTree(raw);
       String code = text(root, "response_code");
       if (!"00".equals(code)) {
         String msg = text(root, "response_text");
         throw new BusinessRuleException(
-            "PayDunya a refusé la création du paiement: "
-                + (msg != null ? msg : "code " + code));
+            "PayDunya a refusé la création du paiement: " + (msg != null ? msg : "code " + code));
       }
       String token = text(root, "token");
       String checkoutUrl = text(root, "response_text");
@@ -117,12 +116,8 @@ public class PaydunyaClient {
     requireEnabled();
     String url = apiRoot() + "/checkout-invoice/confirm/" + token;
     try {
-      String raw = restClient
-          .get()
-          .uri(url)
-          .headers(this::authHeaders)
-          .retrieve()
-          .body(String.class);
+      String raw =
+          restClient.get().uri(url).headers(this::authHeaders).retrieve().body(String.class);
       JsonNode root = objectMapper.readTree(raw);
       String status = text(root, "status");
       JsonNode invoiceNode = root.path("invoice");

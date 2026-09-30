@@ -20,7 +20,8 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
 
   long countByBusinessIdAndIsActive(UUID bId, Boolean active);
 
-  @Query("""
+  @Query(
+      """
       SELECT s FROM Supplier s
       WHERE s.businessId = :bId AND s.isActive = TRUE
         AND (:q IS NULL OR :q = ''

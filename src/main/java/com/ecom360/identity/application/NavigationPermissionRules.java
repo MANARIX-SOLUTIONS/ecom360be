@@ -6,16 +6,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Règles d'accès aux écrans de navigation : chaque clé correspond à une entrée
- * de menu / route ;
- * l'utilisateur doit posséder au moins une des permissions listées. Doit rester
- * aligné avec le
+ * Règles d'accès aux écrans de navigation : chaque clé correspond à une entrée de menu / route ;
+ * l'utilisateur doit posséder au moins une des permissions listées. Doit rester aligné avec le
  * client (fallback) jusqu'à chargement de {@code /permissions/me}.
  */
 public final class NavigationPermissionRules {
 
-  private NavigationPermissionRules() {
-  }
+  private NavigationPermissionRules() {}
 
   public static Map<String, List<String>> asMap() {
     Map<String, List<String>> m = new LinkedHashMap<>();
@@ -26,8 +23,8 @@ public final class NavigationPermissionRules {
     m.put("suppliers", List.of("SUPPLIERS_READ"));
     m.put("purchaseOrders", List.of("PURCHASE_ORDERS_READ"));
     /**
-     * Au moins une permission livreurs (souvent READ seul n’est pas coché si
-     * l’admin donne Créer, etc.).
+     * Au moins une permission livreurs (souvent READ seul n’est pas coché si l’admin donne Créer,
+     * etc.).
      */
     m.put(
         "livreurs",

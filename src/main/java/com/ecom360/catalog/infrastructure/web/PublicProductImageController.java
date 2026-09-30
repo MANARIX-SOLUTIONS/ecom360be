@@ -16,10 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Sert les images produits sans authentification (affichage &lt;img&gt; POS /
- * catalogue).
- */
+/** Sert les images produits sans authentification (affichage &lt;img&gt; POS / catalogue). */
 @RestController
 @RequestMapping(ApiConstants.API_BASE + "/public/product-images")
 @Tag(name = "Public", description = "Fichiers publics")

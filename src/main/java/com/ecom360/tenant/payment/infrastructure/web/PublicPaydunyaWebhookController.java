@@ -36,18 +36,18 @@ public class PublicPaydunyaWebhookController {
   }
 
   /**
-   * PayDunya IPN: typically {@code application/x-www-form-urlencoded} with a
-   * {@code data} field
+   * PayDunya IPN: typically {@code application/x-www-form-urlencoded} with a {@code data} field
    * containing JSON. Also accepts raw JSON body with a {@code data} node.
    *
-   * <p>
-   * Unknown intent → 503 so the PSP can retry. Invalid hash → 401.
+   * <p>Unknown intent → 503 so the PSP can retry. Invalid hash → 401.
    */
-  @PostMapping(value = "/ipn", consumes = {
-      MediaType.APPLICATION_FORM_URLENCODED_VALUE,
-      MediaType.APPLICATION_JSON_VALUE,
-      MediaType.ALL_VALUE
-  })
+  @PostMapping(
+      value = "/ipn",
+      consumes = {
+        MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+        MediaType.APPLICATION_JSON_VALUE,
+        MediaType.ALL_VALUE
+      })
   public ResponseEntity<Map<String, String>> ipn(
       @RequestParam(value = "data", required = false) String dataParam,
       @RequestBody(required = false) String rawBody) {

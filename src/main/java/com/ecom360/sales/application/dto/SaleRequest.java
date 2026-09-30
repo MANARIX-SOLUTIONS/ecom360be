@@ -13,9 +13,8 @@ public record SaleRequest(
     @Min(0) Integer discountAmount,
     @Min(0) Integer amountReceived,
     /**
-     * Montant réellement encaissé à la validation. {@code null} conserve le
-     * comportement historique : intégralité du total, sauf en mode crédit où rien
-     * n'est encaissé.
+     * Montant réellement encaissé à la validation. {@code null} conserve le comportement historique
+     * : intégralité du total, sauf en mode crédit où rien n'est encaissé.
      */
     @Min(0) Integer amountPaid,
     /** Échéance du solde quand la vente laisse un reste à payer. */

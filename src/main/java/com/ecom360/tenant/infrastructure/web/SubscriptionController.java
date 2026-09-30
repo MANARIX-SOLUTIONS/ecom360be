@@ -1,6 +1,7 @@
 package com.ecom360.tenant.infrastructure.web;
 
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
+import com.ecom360.shared.application.dto.PageResponse;
 import com.ecom360.shared.infrastructure.web.ApiConstants;
 import com.ecom360.tenant.application.dto.CancelSubscriptionRequest;
 import com.ecom360.tenant.application.dto.ChangePlanRequest;
@@ -12,7 +13,6 @@ import com.ecom360.tenant.application.service.SubscriptionUsageService;
 import com.ecom360.tenant.payment.application.dto.CreateSubscriptionCheckoutRequest;
 import com.ecom360.tenant.payment.application.dto.SubscriptionCheckoutResponse;
 import com.ecom360.tenant.payment.application.service.SubscriptionCheckoutService;
-import com.ecom360.shared.application.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -65,7 +65,9 @@ public class SubscriptionController {
   }
 
   @PostMapping("/change")
-  @Operation(summary = "Change plan (disabled)", description = "Use POST /subscription/checkout — activation only after payment.")
+  @Operation(
+      summary = "Change plan (disabled)",
+      description = "Use POST /subscription/checkout — activation only after payment.")
   public ResponseEntity<SubscriptionResponse> changePlan(
       @Valid @RequestBody ChangePlanRequest req, @AuthenticationPrincipal UserPrincipal p) {
     return ResponseEntity.ok(subscriptionService.changePlan(req.planSlug(), req.billingCycle(), p));

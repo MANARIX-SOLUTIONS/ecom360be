@@ -7,8 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface PurchaseOrderPaymentRepository
-    extends JpaRepository<PurchaseOrderPayment, UUID> {
+public interface PurchaseOrderPaymentRepository extends JpaRepository<PurchaseOrderPayment, UUID> {
 
   List<PurchaseOrderPayment> findByPurchaseOrderIdOrderByCreatedAtAsc(UUID purchaseOrderId);
 }

@@ -13,9 +13,9 @@ import com.ecom360.notification.application.service.NotificationTypes;
 import com.ecom360.shared.domain.exception.*;
 import com.ecom360.store.domain.model.Store;
 import com.ecom360.store.domain.repository.StoreRepository;
+import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.Collection;
 import java.util.HashMap;
-import com.ecom360.tenant.application.service.SubscriptionService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -86,45 +86,46 @@ public class StockService {
     permissionService.require(p, Permission.STOCK_ADJUST);
     verifyProduct(r.productId(), p.businessId());
     verifyStore(r.storeId(), p.businessId());
-    ProductStoreStock s = stockRepo
-        .findByProductIdAndStoreId(r.productId(), r.storeId())
-        .orElseGet(
-            () -> {
-              if (!"adjustment".equals(r.type()))
-                throw new ResourceNotFoundException("Stock not initialized");
-              ProductStoreStock n = new ProductStoreStock();
-              n.setProductId(r.productId());
-              n.setStoreId(r.storeId());
-              n.setQuantity(0);
-              n.setMinStock(0);
-              return stockRepo.save(n);
-            });
+    ProductStoreStock s =
+        stockRepo
+            .findByProductIdAndStoreId(r.productId(), r.storeId())
+            .orElseGet(
+                () -> {
+                  if (!"adjustment".equals(r.type()))
+                    throw new ResourceNotFoundException("Stock not initialized");
+                  ProductStoreStock n = new ProductStoreStock();
+                  n.setProductId(r.productId());
+                  n.setStoreId(r.storeId());
+                  n.setQuantity(0);
+                  n.setMinStock(0);
+                  return stockRepo.save(n);
+                });
     int before = s.getQuantity();
-    int delta = switch (r.type()) {
-      case "in" -> Math.abs(r.quantity());
-      case "out" -> -Math.abs(r.quantity());
-      case "adjustment" -> {
-        if (r.quantity() < 0)
-          throw new BusinessRuleException("Quantity cannot be negative");
-        yield r.quantity() - before;
-      }
-      default -> throw new BusinessRuleException("Invalid type");
-    };
-    if (before + delta < 0)
-      throw new BusinessRuleException("Insufficient stock");
+    int delta =
+        switch (r.type()) {
+          case "in" -> Math.abs(r.quantity());
+          case "out" -> -Math.abs(r.quantity());
+          case "adjustment" -> {
+            if (r.quantity() < 0) throw new BusinessRuleException("Quantity cannot be negative");
+            yield r.quantity() - before;
+          }
+          default -> throw new BusinessRuleException("Invalid type");
+        };
+    if (before + delta < 0) throw new BusinessRuleException("Insufficient stock");
     s.adjustQuantity(delta);
     stockRepo.save(s);
-    StockMovement m = movementRepo.save(
-        StockMovement.record(
-            r.productId(),
-            r.storeId(),
-            p.userId(),
-            r.type(),
-            delta,
-            before,
-            s.getQuantity(),
-            r.reference(),
-            r.note()));
+    StockMovement m =
+        movementRepo.save(
+            StockMovement.record(
+                r.productId(),
+                r.storeId(),
+                p.userId(),
+                r.type(),
+                delta,
+                before,
+                s.getQuantity(),
+                r.reference(),
+                r.note()));
     notifyLowStockIfNeeded(p.businessId(), s);
     return mapMov(m);
   }
@@ -134,9 +135,10 @@ public class StockService {
     requireBiz(p);
     permissionService.require(p, Permission.STOCK_READ);
     verifyStore(storeId, p.businessId());
-    Page<ProductStoreStock> page = search != null && !search.isBlank()
-        ? stockRepo.searchByStoreId(storeId, search.trim(), pg)
-        : stockRepo.findByStoreId(storeId, pg);
+    Page<ProductStoreStock> page =
+        search != null && !search.isBlank()
+            ? stockRepo.searchByStoreId(storeId, search.trim(), pg)
+            : stockRepo.findByStoreId(storeId, pg);
     return mapLevels(page);
   }
 
@@ -185,17 +187,18 @@ public class StockService {
   @Transactional
   public void updateStockForSale(
       UUID productId, UUID storeId, UUID userId, int qty, String saleId) {
-    ProductStoreStock s = stockRepo
-        .findByProductIdAndStoreId(productId, storeId)
-        .orElseGet(
-            () -> {
-              ProductStoreStock n = new ProductStoreStock();
-              n.setProductId(productId);
-              n.setStoreId(storeId);
-              n.setQuantity(0);
-              n.setMinStock(0);
-              return stockRepo.save(n);
-            });
+    ProductStoreStock s =
+        stockRepo
+            .findByProductIdAndStoreId(productId, storeId)
+            .orElseGet(
+                () -> {
+                  ProductStoreStock n = new ProductStoreStock();
+                  n.setProductId(productId);
+                  n.setStoreId(storeId);
+                  n.setQuantity(0);
+                  n.setMinStock(0);
+                  return stockRepo.save(n);
+                });
     int before = s.getQuantity();
     if (before - qty < 0) {
       throw new BusinessRuleException(
@@ -214,17 +217,18 @@ public class StockService {
   @Transactional
   public void updateStockForPurchase(
       UUID productId, UUID storeId, UUID userId, int qty, String ref) {
-    ProductStoreStock s = stockRepo
-        .findByProductIdAndStoreId(productId, storeId)
-        .orElseGet(
-            () -> {
-              ProductStoreStock n = new ProductStoreStock();
-              n.setProductId(productId);
-              n.setStoreId(storeId);
-              n.setQuantity(0);
-              n.setMinStock(0);
-              return stockRepo.save(n);
-            });
+    ProductStoreStock s =
+        stockRepo
+            .findByProductIdAndStoreId(productId, storeId)
+            .orElseGet(
+                () -> {
+                  ProductStoreStock n = new ProductStoreStock();
+                  n.setProductId(productId);
+                  n.setStoreId(storeId);
+                  n.setQuantity(0);
+                  n.setMinStock(0);
+                  return stockRepo.save(n);
+                });
     int before = s.getQuantity();
     s.adjustQuantity(qty);
     stockRepo.save(s);
@@ -255,8 +259,7 @@ public class StockService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private Page<StockLevelResponse> mapLevels(Page<ProductStoreStock> page) {
@@ -279,7 +282,9 @@ public class StockService {
 
   private Map<UUID, Product> productsById(List<ProductStoreStock> rows) {
     Map<UUID, Product> products = new HashMap<>();
-    for (Product pr : productRepo.findAllById(rows.stream().map(ProductStoreStock::getProductId).distinct().toList())) {
+    for (Product pr :
+        productRepo.findAllById(
+            rows.stream().map(ProductStoreStock::getProductId).distinct().toList())) {
       products.put(pr.getId(), pr);
     }
     return products;
@@ -287,7 +292,9 @@ public class StockService {
 
   private Map<UUID, Store> storesById(List<ProductStoreStock> rows) {
     Map<UUID, Store> stores = new HashMap<>();
-    for (Store st : storeRepo.findAllById(rows.stream().map(ProductStoreStock::getStoreId).distinct().toList())) {
+    for (Store st :
+        storeRepo.findAllById(
+            rows.stream().map(ProductStoreStock::getStoreId).distinct().toList())) {
       stores.put(st.getId(), st);
     }
     return stores;
@@ -297,17 +304,16 @@ public class StockService {
     if (businessId == null || !s.isLowStock()) {
       return;
     }
-    boolean alertsOn = subscriptionService
-        .getPlanForBusiness(businessId)
-        .map(plan -> Boolean.TRUE.equals(plan.getFeatureStockAlerts()))
-        .orElse(true);
+    boolean alertsOn =
+        subscriptionService
+            .getPlanForBusiness(businessId)
+            .map(plan -> Boolean.TRUE.equals(plan.getFeatureStockAlerts()))
+            .orElse(true);
     if (!alertsOn) {
       return;
     }
-    String productName = productRepo
-        .findById(s.getProductId())
-        .map(Product::getName)
-        .orElse("Produit");
+    String productName =
+        productRepo.findById(s.getProductId()).map(Product::getName).orElse("Produit");
     String storeName = storeRepo.findById(s.getStoreId()).map(Store::getName).orElse("Boutique");
     String actionUrl = "/products/" + s.getProductId() + "?storeId=" + s.getStoreId();
     notificationPublisher.notifyBusiness(

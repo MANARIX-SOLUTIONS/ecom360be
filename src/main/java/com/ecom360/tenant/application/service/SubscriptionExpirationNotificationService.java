@@ -40,18 +40,13 @@ public class SubscriptionExpirationNotificationService {
     try {
       notifyExpiredInternal(businessId, wasTrialing, periodEnd);
     } catch (Exception e) {
-      log.warn(
-          "Expiration notification skipped for business {}: {}",
-          businessId,
-          e.getMessage());
+      log.warn("Expiration notification skipped for business {}: {}", businessId, e.getMessage());
     }
   }
 
-  private void notifyExpiredInternal(
-      UUID businessId, boolean wasTrialing, LocalDate periodEnd) {
+  private void notifyExpiredInternal(UUID businessId, boolean wasTrialing, LocalDate periodEnd) {
     String endStr = periodEnd != null ? periodEnd.format(DATE_FR) : "";
-    String title =
-        wasTrialing ? "Votre essai est terminé" : "Votre abonnement a expiré";
+    String title = wasTrialing ? "Votre essai est terminé" : "Votre abonnement a expiré";
     String body =
         wasTrialing
             ? ("L’essai gratuit"

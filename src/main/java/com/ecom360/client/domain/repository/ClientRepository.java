@@ -12,15 +12,16 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ClientRepository extends JpaRepository<Client, UUID> {
-    Page<Client> findByBusinessIdAndIsActive(UUID bId, Boolean active, Pageable p);
+  Page<Client> findByBusinessIdAndIsActive(UUID bId, Boolean active, Pageable p);
 
-    Optional<Client> findByBusinessIdAndId(UUID bId, UUID id);
+  Optional<Client> findByBusinessIdAndId(UUID bId, UUID id);
 
-    long countByBusinessId(UUID bId);
+  long countByBusinessId(UUID bId);
 
-    long countByBusinessIdAndIsActive(UUID bId, Boolean active);
+  long countByBusinessIdAndIsActive(UUID bId, Boolean active);
 
-    @Query("""
+  @Query(
+      """
             SELECT c FROM Client c
             WHERE c.businessId = :bId AND c.isActive = TRUE
               AND (:q IS NULL OR :q = ''
@@ -29,14 +30,15 @@ public interface ClientRepository extends JpaRepository<Client, UUID> {
                 OR LOWER(COALESCE(c.email, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(COALESCE(c.address, '')) LIKE LOWER(CONCAT('%', :q, '%')))
             """)
-    Page<Client> searchActive(
-            @Param("bId") UUID businessId, @Param("q") String q, Pageable pageable);
+  Page<Client> searchActive(@Param("bId") UUID businessId, @Param("q") String q, Pageable pageable);
 
-    @Query("SELECT COUNT(c) FROM Client c WHERE c.businessId = :bId AND c.isActive = TRUE AND"
-            + " c.creditBalance > 0")
-    long countDebtorsWithPositiveBalance(@Param("bId") UUID bId);
+  @Query(
+      "SELECT COUNT(c) FROM Client c WHERE c.businessId = :bId AND c.isActive = TRUE AND"
+          + " c.creditBalance > 0")
+  long countDebtorsWithPositiveBalance(@Param("bId") UUID bId);
 
-    @Query("SELECT COALESCE(SUM(c.creditBalance), 0) FROM Client c WHERE c.businessId = :bId AND"
-            + " c.isActive = TRUE AND c.creditBalance > 0")
-    long sumPositiveCreditBalance(@Param("bId") UUID bId);
+  @Query(
+      "SELECT COALESCE(SUM(c.creditBalance), 0) FROM Client c WHERE c.businessId = :bId AND"
+          + " c.isActive = TRUE AND c.creditBalance > 0")
+  long sumPositiveCreditBalance(@Param("bId") UUID bId);
 }

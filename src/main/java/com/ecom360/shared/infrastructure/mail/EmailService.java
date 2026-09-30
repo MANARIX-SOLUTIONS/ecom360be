@@ -13,8 +13,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 
 /**
- * Sends transactional emails (password reset, invitation). When SMTP is not
- * configured (MAIL_HOST
+ * Sends transactional emails (password reset, invitation). When SMTP is not configured (MAIL_HOST
  * empty), logs the email instead of sending.
  */
 @Service
@@ -47,7 +46,8 @@ public class EmailService {
 
   public void sendPasswordResetEmail(String to, String resetLink) {
     String subject = "360 PME Commerce | Réinitialisation de votre mot de passe";
-    String plain = """
+    String plain =
+        """
         Bonjour,
 
         Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte
@@ -62,19 +62,18 @@ public class EmailService {
         Cordialement,
         L’équipe 360 PME Commerce
         """
-        .formatted(resetLink);
+            .formatted(resetLink);
 
     Context ctx = mailContext("Réinitialisation — lien valable 24 h.");
     ctx.setVariable("resetLink", resetLink);
     send(to, subject, plain, mailTemplates.render("mail/password-reset", ctx));
   }
 
-  /**
-   * Accusé de réception d'une demande de démo (PME / Afrique : délai annoncé).
-   */
+  /** Accusé de réception d'une demande de démo (PME / Afrique : délai annoncé). */
   public void sendDemoRequestReceivedEmail(String to, String fullName, String businessName) {
     String subject = "360 PME Commerce | Demande de démo confirmée";
-    String plain = """
+    String plain =
+        """
         Bonjour %s,
 
         Merci pour votre intérêt.
@@ -88,7 +87,7 @@ public class EmailService {
         Cordialement,
         L’équipe 360 PME Commerce
         """
-        .formatted(fullName, businessName);
+            .formatted(fullName, businessName);
 
     Context ctx = mailContext("Votre demande de démo a bien été reçue.");
     ctx.setVariable("greetingLine", "Bonjour " + fullName + ",");
@@ -111,10 +110,12 @@ public class EmailService {
   /** Refus de demande démo (motif optionnel). */
   public void sendDemoRequestRejectedEmail(String to, String fullName, String reasonOrNull) {
     String subject = "360 PME Commerce | Suite à votre demande de démo";
-    String extra = reasonOrNull != null && !reasonOrNull.isBlank()
-        ? "\n\nMotif : " + reasonOrNull + "\n"
-        : "\n";
-    String plain = """
+    String extra =
+        reasonOrNull != null && !reasonOrNull.isBlank()
+            ? "\n\nMotif : " + reasonOrNull + "\n"
+            : "\n";
+    String plain =
+        """
         Bonjour %s,
 
         Nous ne pouvons pas donner suite à votre demande de démo pour le moment.%s
@@ -124,7 +125,7 @@ public class EmailService {
         Cordialement,
         L’équipe 360 PME Commerce
         """
-        .formatted(fullName, extra);
+            .formatted(fullName, extra);
 
     boolean hasReason = reasonOrNull != null && !reasonOrNull.isBlank();
     Context ctx = mailContext("Réponse suite à votre demande de démo.");
@@ -137,7 +138,8 @@ public class EmailService {
   public void sendInvitationEmail(
       String to, String fullName, String businessName, String setPasswordLink) {
     String subject = "360 PME Commerce | Invitation à rejoindre " + businessName;
-    String plain = """
+    String plain =
+        """
         Bonjour %s,
 
         Vous avez été invité(e) à rejoindre « %s » sur 360 PME Commerce.
@@ -152,7 +154,7 @@ public class EmailService {
         Cordialement,
         L’équipe 360 PME Commerce
         """
-        .formatted(fullName, businessName, setPasswordLink);
+            .formatted(fullName, businessName, setPasswordLink);
 
     Context ctx = mailContext("Activez votre accès 360 PME Commerce — valable 24 h.");
     ctx.setVariable("greetingLine", "Bonjour " + fullName + ",");
@@ -214,7 +216,8 @@ public class EmailService {
 
     if (cancellingAtPeriodEnd) {
       subject = "360 PME Commerce | Fin d’accès programmée au " + periodEndFormattedFr;
-      plain = """
+      plain =
+          """
           Bonjour %s,
 
           Conformément à votre demande, l’accès à votre abonnement prendra fin le %s.
@@ -226,15 +229,18 @@ public class EmailService {
           Cordialement,
           L’équipe 360 PME Commerce
           """
-          .formatted(fullName, periodEndFormattedFr, subscriptionUrl);
+              .formatted(fullName, periodEndFormattedFr, subscriptionUrl);
       heading = "Fin d’accès programmée";
-      detailLine = "Conformément à votre demande, l’accès prendra fin le " + periodEndFormattedFr + ".";
+      detailLine =
+          "Conformément à votre demande, l’accès prendra fin le " + periodEndFormattedFr + ".";
       ctaLabel = "Gérer ou réactiver mon abonnement";
     } else if (trialing) {
-      subject = daysLeft == 1
-          ? "360 PME Commerce | Votre essai se termine demain"
-          : "360 PME Commerce | Il reste %d jours d’essai".formatted(daysLeft);
-      plain = """
+      subject =
+          daysLeft == 1
+              ? "360 PME Commerce | Votre essai se termine demain"
+              : "360 PME Commerce | Il reste %d jours d’essai".formatted(daysLeft);
+      plain =
+          """
           Bonjour %s,
 
           Votre essai gratuit se termine le %s.
@@ -245,17 +251,20 @@ public class EmailService {
           Cordialement,
           L’équipe 360 PME Commerce
           """
-          .formatted(fullName, periodEndFormattedFr, subscriptionUrl);
-      heading = daysLeft == 1
-          ? "Votre essai se termine demain"
-          : "Plus que %d jours d’essai".formatted(daysLeft);
+              .formatted(fullName, periodEndFormattedFr, subscriptionUrl);
+      heading =
+          daysLeft == 1
+              ? "Votre essai se termine demain"
+              : "Plus que %d jours d’essai".formatted(daysLeft);
       detailLine = "Votre essai gratuit se termine le " + periodEndFormattedFr + ".";
       ctaLabel = "Choisir un plan avant la date limite";
     } else {
-      subject = daysLeft == 1
-          ? "360 PME Commerce | Fin de période d’abonnement demain"
-          : "360 PME Commerce | Fin de période dans %d jours".formatted(daysLeft);
-      plain = """
+      subject =
+          daysLeft == 1
+              ? "360 PME Commerce | Fin de période d’abonnement demain"
+              : "360 PME Commerce | Fin de période dans %d jours".formatted(daysLeft);
+      plain =
+          """
           Bonjour %s,
 
           Votre période d’abonnement arrive à échéance le %s.
@@ -266,10 +275,11 @@ public class EmailService {
           Cordialement,
           L’équipe 360 PME Commerce
           """
-          .formatted(fullName, periodEndFormattedFr, subscriptionUrl);
-      heading = daysLeft == 1
-          ? "Fin de votre période actuelle demain"
-          : "Renouvellement dans %d jours".formatted(daysLeft);
+              .formatted(fullName, periodEndFormattedFr, subscriptionUrl);
+      heading =
+          daysLeft == 1
+              ? "Fin de votre période actuelle demain"
+              : "Renouvellement dans %d jours".formatted(daysLeft);
       detailLine = "La période en cours se clôt le " + periodEndFormattedFr + ".";
       ctaLabel = "Vérifier ou renouveler l’abonnement";
     }
@@ -291,8 +301,7 @@ public class EmailService {
         wasTrialing
             ? "360 PME Commerce | Votre essai est terminé"
             : "360 PME Commerce | Votre abonnement a expiré";
-    String heading =
-        wasTrialing ? "Votre essai est terminé" : "Votre abonnement a expiré";
+    String heading = wasTrialing ? "Votre essai est terminé" : "Votre abonnement a expiré";
     String detailLine =
         wasTrialing
             ? "Choisissez un plan pour retrouver l’accès à 360 PME Commerce."
@@ -395,13 +404,16 @@ public class EmailService {
       String trialEndFormattedFrOrNull,
       String dashboardUrl) {
     boolean trial = trialEndFormattedFrOrNull != null && !trialEndFormattedFrOrNull.isBlank();
-    String subject = trial
-        ? "360 PME Commerce | Bienvenue, votre essai démarre"
-        : "360 PME Commerce | Bienvenue sur votre espace";
-    String trialBlock = trial
-        ? "\nUn essai gratuit est actif jusqu’au %s.".formatted(trialEndFormattedFrOrNull)
-        : "\nVotre abonnement est actif.";
-    String plain = """
+    String subject =
+        trial
+            ? "360 PME Commerce | Bienvenue, votre essai démarre"
+            : "360 PME Commerce | Bienvenue sur votre espace";
+    String trialBlock =
+        trial
+            ? "\nUn essai gratuit est actif jusqu’au %s.".formatted(trialEndFormattedFrOrNull)
+            : "\nVotre abonnement est actif.";
+    String plain =
+        """
         Bonjour %s,
 
         Bienvenue sur 360 PME Commerce pour « %s ».%s
@@ -420,12 +432,13 @@ public class EmailService {
         Cordialement,
         L’équipe 360 PME Commerce
         """
-        .formatted(
-            fullName, businessName, trialBlock, buildSubscriptionSettingsLink(), dashboardUrl);
+            .formatted(
+                fullName, businessName, trialBlock, buildSubscriptionSettingsLink(), dashboardUrl);
 
-    String trialLine = trial
-        ? "Un essai gratuit est actif jusqu’au " + trialEndFormattedFrOrNull + "."
-        : "Votre abonnement est actif.";
+    String trialLine =
+        trial
+            ? "Un essai gratuit est actif jusqu’au " + trialEndFormattedFrOrNull + "."
+            : "Votre abonnement est actif.";
 
     Context ctx = mailContext("Bienvenue sur 360 PME Commerce — premiers pas.");
     ctx.setVariable("greetingLine", "Bonjour " + fullName + ",");
@@ -445,9 +458,10 @@ public class EmailService {
 
   public void sendBillingReminderEmail(
       String to, String fullName, String subject, String fullBody) {
-    String greeting = fullName != null && !fullName.isBlank()
-        ? "Bonjour %s,\n\n".formatted(fullName)
-        : "Bonjour,\n\n";
+    String greeting =
+        fullName != null && !fullName.isBlank()
+            ? "Bonjour %s,\n\n".formatted(fullName)
+            : "Bonjour,\n\n";
     String plain = greeting + fullBody.strip() + "\n\nCordialement,\nL’équipe 360 PME Commerce";
 
     String pre = subject.length() > 90 ? subject.substring(0, 87) + "…" : subject;
@@ -467,11 +481,13 @@ public class EmailService {
       String message,
       String maintenanceWindowOrBlank,
       String statusPageUrl) {
-    String window = maintenanceWindowOrBlank != null && !maintenanceWindowOrBlank.isBlank()
-        ? maintenanceWindowOrBlank + "\n\n"
-        : "";
+    String window =
+        maintenanceWindowOrBlank != null && !maintenanceWindowOrBlank.isBlank()
+            ? maintenanceWindowOrBlank + "\n\n"
+            : "";
     String subject = "360 PME Commerce — " + title;
-    String plain = """
+    String plain =
+        """
         Bonjour %s,
 
         %s
@@ -484,17 +500,18 @@ public class EmailService {
         Cordialement,
         L’équipe 360 PME Commerce
         """
-        .formatted(
-            businessName != null && !businessName.isBlank() ? businessName : "équipe",
-            message,
-            window,
-            statusPageUrl != null && !statusPageUrl.isBlank()
-                ? statusPageUrl
-                : buildAppHomeLink());
+            .formatted(
+                businessName != null && !businessName.isBlank() ? businessName : "équipe",
+                message,
+                window,
+                statusPageUrl != null && !statusPageUrl.isBlank()
+                    ? statusPageUrl
+                    : buildAppHomeLink());
 
     String salute = businessName != null && !businessName.isBlank() ? businessName : "équipe";
     boolean hasWindow = maintenanceWindowOrBlank != null && !maintenanceWindowOrBlank.isBlank();
-    String link = statusPageUrl != null && !statusPageUrl.isBlank() ? statusPageUrl : buildAppHomeLink();
+    String link =
+        statusPageUrl != null && !statusPageUrl.isBlank() ? statusPageUrl : buildAppHomeLink();
 
     Context ctx = mailContext(title);
     ctx.setVariable("title", title);

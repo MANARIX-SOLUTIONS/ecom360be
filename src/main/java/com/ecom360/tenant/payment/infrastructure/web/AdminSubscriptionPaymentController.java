@@ -47,12 +47,7 @@ public class AdminSubscriptionPaymentController {
     Instant toI = SubscriptionCheckoutService.parseInstantOrDate(to, true);
     return ResponseEntity.ok(
         checkoutService.listAdminPayments(
-            businessId,
-            status,
-            fromI,
-            toI,
-            page,
-            Math.min(size, ApiConstants.MAX_PAGE_SIZE)));
+            businessId, status, fromI, toI, page, Math.min(size, ApiConstants.MAX_PAGE_SIZE)));
   }
 
   @PostMapping("/{intentId}/mark-paid")

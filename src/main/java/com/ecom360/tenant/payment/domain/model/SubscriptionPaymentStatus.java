@@ -8,6 +8,5 @@ public final class SubscriptionPaymentStatus {
   public static final String EXPIRED = "expired";
   public static final String CANCELLED = "cancelled";
 
-  private SubscriptionPaymentStatus() {
-  }
+  private SubscriptionPaymentStatus() {}
 }

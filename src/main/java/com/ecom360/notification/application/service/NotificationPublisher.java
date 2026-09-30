@@ -16,8 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Writes in-app notifications to business members whose role has at least one
- * of the given permissions and whose preference for {@code type} is on.
+ * Writes in-app notifications to business members whose role has at least one of the given
+ * permissions and whose preference for {@code type} is on.
  */
 @Service
 public class NotificationPublisher {
@@ -60,20 +60,9 @@ public class NotificationPublisher {
       Permission... requiredAny) {
     try {
       return notifyInternal(
-          businessId,
-          type,
-          title,
-          body,
-          actionUrl,
-          dedupWindow,
-          null,
-          requiredAny);
+          businessId, type, title, body, actionUrl, dedupWindow, null, requiredAny);
     } catch (Exception e) {
-      log.warn(
-          "Notification skipped business={} type={}: {}",
-          businessId,
-          type,
-          e.getMessage());
+      log.warn("Notification skipped business={} type={}: {}", businessId, type, e.getMessage());
       return List.of();
     }
   }
@@ -85,32 +74,16 @@ public class NotificationPublisher {
       String body,
       String actionUrl,
       Permission... requiredAny) {
-    return notifyBusiness(
-        businessId, type, title, body, actionUrl, null, requiredAny);
+    return notifyBusiness(businessId, type, title, body, actionUrl, null, requiredAny);
   }
 
   /** P / G only — used for POS Wave / OM so cashiers are not notified. */
   public List<UUID> notifyOwnersAndManagers(
-      UUID businessId,
-      String type,
-      String title,
-      String body,
-      String actionUrl) {
+      UUID businessId, String type, String title, String body, String actionUrl) {
     try {
-      return notifyInternal(
-          businessId,
-          type,
-          title,
-          body,
-          actionUrl,
-          null,
-          OWNER_MANAGER_ROLES);
+      return notifyInternal(businessId, type, title, body, actionUrl, null, OWNER_MANAGER_ROLES);
     } catch (Exception e) {
-      log.warn(
-          "Notification skipped business={} type={}: {}",
-          businessId,
-          type,
-          e.getMessage());
+      log.warn("Notification skipped business={} type={}: {}", businessId, type, e.getMessage());
       return List.of();
     }
   }
@@ -151,8 +124,7 @@ public class NotificationPublisher {
       if (!preferenceService.isEnabled(userId, type)) {
         continue;
       }
-      notificationService.createNotification(
-          businessId, userId, type, title, body, actionUrl);
+      notificationService.createNotification(businessId, userId, type, title, body, actionUrl);
       notified.add(userId);
     }
     return notified;

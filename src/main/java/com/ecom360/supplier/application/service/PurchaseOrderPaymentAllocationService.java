@@ -11,10 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Impute un paiement global du fournisseur sur ses bons réceptionnés impayés,
- * du plus ancien au plus récent. Sans cette imputation, le solde fournisseur et
- * la somme des restes dus divergeraient dès le premier paiement saisi depuis la
- * fiche fournisseur.
+ * Impute un paiement global du fournisseur sur ses bons réceptionnés impayés, du plus ancien au
+ * plus récent. Sans cette imputation, le solde fournisseur et la somme des restes dus divergeraient
+ * dès le premier paiement saisi depuis la fiche fournisseur.
  */
 @Service
 public class PurchaseOrderPaymentAllocationService {
@@ -29,8 +28,8 @@ public class PurchaseOrderPaymentAllocationService {
   }
 
   /**
-   * @return la part du montant qui n'a pu être imputée à aucun bon (avance, ou
-   *     reprise de données antérieure).
+   * @return la part du montant qui n'a pu être imputée à aucun bon (avance, ou reprise de données
+   *     antérieure).
    */
   @Transactional
   public int allocateSupplierRepayment(

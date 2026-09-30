@@ -50,9 +50,7 @@ public class SubscriptionCheckoutService {
 
   private static final Logger log = LoggerFactory.getLogger(SubscriptionCheckoutService.class);
 
-  /**
-   * Pending checkout intents older than this are expired by the scheduled job.
-   */
+  /** Pending checkout intents older than this are expired by the scheduled job. */
   public static final int PENDING_INTENT_TTL_HOURS = 48;
 
   private final SubscriptionPaymentIntentRepository intentRepository;
@@ -104,9 +102,10 @@ public class SubscriptionCheckoutService {
     subscriptionService.assertNotAlreadyOnPlan(p.businessId(), plan, cycle);
 
     int amount = subscriptionService.resolvePlanAmount(plan, cycle);
-    Business business = businessRepository
-        .findById(p.businessId())
-        .orElseThrow(() -> new ResourceNotFoundException("Business", p.businessId()));
+    Business business =
+        businessRepository
+            .findById(p.businessId())
+            .orElseThrow(() -> new ResourceNotFoundException("Business", p.businessId()));
 
     String returnUrl = trimSlash(appUrl) + "/settings/subscription?checkout=";
 
@@ -126,25 +125,22 @@ public class SubscriptionCheckoutService {
     intent.setReturnUrl(returnUrl);
 
     User user = userRepository.findById(p.userId()).orElse(null);
-    String description = "Abonnement Ecom 360 PME — "
-        + plan.getName()
-        + " ("
-        + cycle
-        + ") — "
-        + business.getName();
+    String description =
+        "Abonnement Ecom 360 PME — " + plan.getName() + " (" + cycle + ") — " + business.getName();
 
     PaydunyaCheckoutResult checkout;
     try {
-      checkout = paydunyaClient.createCheckoutInvoice(
-          amount,
-          description,
-          channel,
-          intent.getId(),
-          returnUrl,
-          returnUrl + "&cancelled=1",
-          user != null ? user.getFullName() : business.getName(),
-          business.getEmail(),
-          business.getPhone());
+      checkout =
+          paydunyaClient.createCheckoutInvoice(
+              amount,
+              description,
+              channel,
+              intent.getId(),
+              returnUrl,
+              returnUrl + "&cancelled=1",
+              user != null ? user.getFullName() : business.getName(),
+              business.getEmail(),
+              business.getPhone());
     } catch (RuntimeException e) {
       intent.markFailed(e.getMessage());
       intentRepository.save(intent);
@@ -181,12 +177,14 @@ public class SubscriptionCheckoutService {
       trySyncPendingFromPaydunya(intentId, p.userId());
     }
 
-    SubscriptionPaymentIntent intent = intentRepository
-        .findById(intentId)
-        .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
-    Plan plan = planRepository
-        .findById(intent.getPlanId())
-        .orElseThrow(() -> new ResourceNotFoundException("Plan", intent.getPlanId()));
+    SubscriptionPaymentIntent intent =
+        intentRepository
+            .findById(intentId)
+            .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
+    Plan plan =
+        planRepository
+            .findById(intent.getPlanId())
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", intent.getPlanId()));
     return toCheckoutResponse(intent, plan.getSlug());
   }
 
@@ -195,15 +193,14 @@ public class SubscriptionCheckoutService {
       UserPrincipal p, int page, int size) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_READ);
-    Page<SubscriptionPaymentIntent> result = intentRepository.findByBusinessIdOrderByCreatedAtDesc(
-        p.businessId(), PageRequest.of(page, size));
+    Page<SubscriptionPaymentIntent> result =
+        intentRepository.findByBusinessIdOrderByCreatedAtDesc(
+            p.businessId(), PageRequest.of(page, size));
     return PageResponse.of(
         result.map(
             intent -> {
-              String slug = planRepository
-                  .findById(intent.getPlanId())
-                  .map(Plan::getSlug)
-                  .orElse("unknown");
+              String slug =
+                  planRepository.findById(intent.getPlanId()).map(Plan::getSlug).orElse("unknown");
               return toCheckoutResponse(intent, slug);
             }));
   }
@@ -279,9 +276,10 @@ public class SubscriptionCheckoutService {
   @Transactional
   public AdminSubscriptionPaymentResponse markPaid(
       UUID intentId, String note, UserPrincipal admin) {
-    SubscriptionPaymentIntent locked = intentRepository
-        .findByIdForUpdate(intentId)
-        .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
+    SubscriptionPaymentIntent locked =
+        intentRepository
+            .findByIdForUpdate(intentId)
+            .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
     if (locked.isPaid()) {
       return toAdminResponse(locked);
     }
@@ -296,12 +294,13 @@ public class SubscriptionCheckoutService {
   @Transactional(readOnly = true)
   public PageResponse<AdminSubscriptionPaymentResponse> listAdminPayments(
       UUID businessId, String status, Instant from, Instant to, int page, int size) {
-    Page<SubscriptionPaymentIntent> result = intentRepository.search(
-        businessId,
-        status != null && !status.isBlank() ? status : null,
-        from,
-        to,
-        PageRequest.of(page, size));
+    Page<SubscriptionPaymentIntent> result =
+        intentRepository.search(
+            businessId,
+            status != null && !status.isBlank() ? status : null,
+            from,
+            to,
+            PageRequest.of(page, size));
     return PageResponse.of(result.map(this::toAdminResponse));
   }
 
@@ -309,12 +308,13 @@ public class SubscriptionCheckoutService {
   @Transactional
   public int expireStalePendingIntents() {
     Instant cutoff = Instant.now().minusSeconds(PENDING_INTENT_TTL_HOURS * 3600L);
-    List<SubscriptionPaymentIntent> stale = intentRepository.findByStatusAndCreatedAtBefore(
-        SubscriptionPaymentStatus.PENDING, cutoff);
+    List<SubscriptionPaymentIntent> stale =
+        intentRepository.findByStatusAndCreatedAtBefore(SubscriptionPaymentStatus.PENDING, cutoff);
     for (SubscriptionPaymentIntent intent : stale) {
       intent.markExpired("Checkout expiré après " + PENDING_INTENT_TTL_HOURS + "h sans paiement");
       intentRepository.save(intent);
-      log.info("Expired stale payment intent {} (business={})", intent.getId(), intent.getBusinessId());
+      log.info(
+          "Expired stale payment intent {} (business={})", intent.getId(), intent.getBusinessId());
     }
     return stale.size();
   }
@@ -331,11 +331,9 @@ public class SubscriptionCheckoutService {
         return;
       }
       if (confirm.isCompleted()) {
-        fulfillLockedIntent(
-            locked, "paydunya_confirm", actorUserId, null, confirm.totalAmount());
+        fulfillLockedIntent(locked, "paydunya_confirm", actorUserId, null, confirm.totalAmount());
       } else if (confirm.isFailedOrCancelled()) {
-        locked.markFailed(
-            confirm.failReason() != null ? confirm.failReason() : confirm.status());
+        locked.markFailed(confirm.failReason() != null ? confirm.failReason() : confirm.status());
         intentRepository.save(locked);
       }
     } catch (BusinessRuleException e) {
@@ -357,8 +355,7 @@ public class SubscriptionCheckoutService {
   }
 
   /**
-   * Must be called with a pessimistically locked pending (or already-paid) intent
-   * in the same
+   * Must be called with a pessimistically locked pending (or already-paid) intent in the same
    * transaction.
    */
   private void fulfillLockedIntent(
@@ -376,11 +373,12 @@ public class SubscriptionCheckoutService {
     }
 
     if (paidAmount != null && !paidAmount.equals(intent.getAmount())) {
-      String msg = "Montant PayDunya ("
-          + paidAmount
-          + ") différent de l'intention ("
-          + intent.getAmount()
-          + ")";
+      String msg =
+          "Montant PayDunya ("
+              + paidAmount
+              + ") différent de l'intention ("
+              + intent.getAmount()
+              + ")";
       intent.markFailed(msg);
       intentRepository.save(intent);
       log.error("Payment amount mismatch intent={} {}", intent.getId(), msg);
@@ -393,12 +391,14 @@ public class SubscriptionCheckoutService {
           intent.getAmount());
     }
 
-    Plan plan = planRepository
-        .findById(intent.getPlanId())
-        .orElseThrow(() -> new ResourceNotFoundException("Plan", intent.getPlanId()));
+    Plan plan =
+        planRepository
+            .findById(intent.getPlanId())
+            .orElseThrow(() -> new ResourceNotFoundException("Plan", intent.getPlanId()));
 
-    Subscription subscription = subscriptionService.activatePaidPlan(
-        intent.getBusinessId(), plan.getSlug(), intent.getBillingCycle());
+    Subscription subscription =
+        subscriptionService.activatePaidPlan(
+            intent.getBusinessId(), plan.getSlug(), intent.getBillingCycle());
 
     Invoice invoice = new Invoice();
     invoice.setBusinessId(intent.getBusinessId());
@@ -460,9 +460,10 @@ public class SubscriptionCheckoutService {
   }
 
   private SubscriptionPaymentIntent requireIntentForBusiness(UUID intentId, UUID businessId) {
-    SubscriptionPaymentIntent intent = intentRepository
-        .findById(intentId)
-        .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
+    SubscriptionPaymentIntent intent =
+        intentRepository
+            .findById(intentId)
+            .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
     if (!intent.getBusinessId().equals(businessId)) {
       throw new AccessDeniedException("Payment intent does not belong to this business");
     }
@@ -492,7 +493,8 @@ public class SubscriptionCheckoutService {
     Plan plan = planRepository.findById(intent.getPlanId()).orElse(null);
     String invoiceNumber = null;
     if (intent.getInvoiceId() != null) {
-      invoiceNumber = invoiceRepository.findById(intent.getInvoiceId()).map(Invoice::getNumber).orElse(null);
+      invoiceNumber =
+          invoiceRepository.findById(intent.getInvoiceId()).map(Invoice::getNumber).orElse(null);
     }
     return new AdminSubscriptionPaymentResponse(
         intent.getId(),

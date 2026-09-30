@@ -56,15 +56,7 @@ public class SharedCatalogStockService {
       if (qty > 0 && userId != null) {
         movementRepository.save(
             StockMovement.record(
-                productId,
-                store.getId(),
-                userId,
-                "in",
-                qty,
-                0,
-                qty,
-                null,
-                "Initial stock"));
+                productId, store.getId(), userId, "in", qty, 0, qty, null, "Initial stock"));
       }
     }
   }

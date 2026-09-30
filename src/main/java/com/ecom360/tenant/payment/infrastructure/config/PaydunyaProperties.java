@@ -11,6 +11,7 @@ public class PaydunyaProperties {
   private String privateKey = "";
   private String token = "";
   private String storeName = "Ecom 360 PME";
+
   /** Public API base used for IPN callback, e.g. https://api.example.com */
   private String apiPublicUrl = "http://localhost:8080";
 

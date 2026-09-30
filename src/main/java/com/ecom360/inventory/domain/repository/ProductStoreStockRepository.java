@@ -18,17 +18,15 @@ public interface ProductStoreStockRepository extends JpaRepository<ProductStoreS
 
   boolean existsByProductIdAndStoreId(UUID productId, UUID storeId);
 
-  /**
-   * Full store stock (dashboard / low-stock scans). Prefer the pageable overload
-   * for UI lists.
-   */
+  /** Full store stock (dashboard / low-stock scans). Prefer the pageable overload for UI lists. */
   List<ProductStoreStock> findByStoreId(UUID storeId);
 
   Page<ProductStoreStock> findByStoreId(UUID storeId, Pageable pageable);
 
   List<ProductStoreStock> findByStoreIdAndProductIdIn(UUID storeId, Collection<UUID> productIds);
 
-  @Query("""
+  @Query(
+      """
       SELECT s FROM ProductStoreStock s, Product p
       WHERE s.storeId = :storeId AND p.id = s.productId
         AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))

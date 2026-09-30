@@ -142,9 +142,10 @@ public class PurchaseOrderService {
     requireBiz(p);
     requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
-    PurchaseOrder po = poRepo
-        .findByBusinessIdAndIdForUpdate(p.businessId(), id)
-        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", id));
+    PurchaseOrder po =
+        poRepo
+            .findByBusinessIdAndIdForUpdate(p.businessId(), id)
+            .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", id));
     String newStatus = req.status();
     po.transitionTo(newStatus);
     if ("received".equals(newStatus)) {
@@ -163,9 +164,10 @@ public class PurchaseOrderService {
       po.recomputePaymentStatus();
       po.setDueDate(amountPaid < po.getTotalAmount() ? req.dueDate() : null);
 
-      Supplier sup = supplierRepo
-          .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
-          .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
+      Supplier sup =
+          supplierRepo
+              .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
+              .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
       sup.addToBalance(po.getRemainingAmount());
       supplierRepo.save(sup);
 
@@ -180,9 +182,8 @@ public class PurchaseOrderService {
   }
 
   /**
-   * Règle un versement sur le solde d'un bon réceptionné. Déduit le solde
-   * fournisseur sans créer de {@code SupplierPayment} (même logique que vente vs
-   * client_payment).
+   * Règle un versement sur le solde d'un bon réceptionné. Déduit le solde fournisseur sans créer de
+   * {@code SupplierPayment} (même logique que vente vs client_payment).
    */
   @Transactional
   public PurchaseOrderPaymentResponse recordPayment(
@@ -190,9 +191,10 @@ public class PurchaseOrderService {
     requireBiz(p);
     requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_UPDATE);
-    PurchaseOrder po = poRepo
-        .findByBusinessIdAndIdForUpdate(p.businessId(), poId)
-        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId));
+    PurchaseOrder po =
+        poRepo
+            .findByBusinessIdAndIdForUpdate(p.businessId(), poId)
+            .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId));
     PurchaseOrderPaymentPolicy.requirePayment(po, req.amount());
 
     po.applyPayment(req.amount());
@@ -201,20 +203,22 @@ public class PurchaseOrderService {
     }
     poRepo.save(po);
 
-    Supplier sup = supplierRepo
-        .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
-        .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
+    Supplier sup =
+        supplierRepo
+            .findByBusinessIdAndId(p.businessId(), po.getSupplierId())
+            .orElseThrow(() -> new ResourceNotFoundException("Supplier", po.getSupplierId()));
     sup.deductFromBalance(req.amount());
     supplierRepo.save(sup);
 
-    PurchaseOrderPayment payment = poPaymentRepo.save(
-        PurchaseOrderPayment.record(
-            po,
-            p.userId(),
-            req.amount(),
-            req.paymentMethod(),
-            PurchaseOrderPaymentKind.INSTALLMENT,
-            req.note()));
+    PurchaseOrderPayment payment =
+        poPaymentRepo.save(
+            PurchaseOrderPayment.record(
+                po,
+                p.userId(),
+                req.amount(),
+                req.paymentMethod(),
+                PurchaseOrderPaymentKind.INSTALLMENT,
+                req.note()));
     return mapPayment(payment);
   }
 
@@ -222,9 +226,10 @@ public class PurchaseOrderService {
     requireBiz(p);
     requireSupplierTracking(p);
     permissionService.require(p, Permission.PURCHASE_ORDERS_READ);
-    PurchaseOrder po = poRepo
-        .findByBusinessIdAndId(p.businessId(), poId)
-        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId));
+    PurchaseOrder po =
+        poRepo
+            .findByBusinessIdAndId(p.businessId(), poId)
+            .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", poId));
     return poPaymentRepo.findByPurchaseOrderIdOrderByCreatedAtAsc(po.getId()).stream()
         .map(this::mapPayment)
         .toList();
@@ -240,20 +245,21 @@ public class PurchaseOrderService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private PurchaseOrderResponse mapPO(PurchaseOrder po) {
-    List<PurchaseOrderLineResponse> lines = lineRepo.findByPurchaseOrderId(po.getId()).stream()
-        .map(
-            l -> new PurchaseOrderLineResponse(
-                l.getId(),
-                l.getProductId(),
-                l.getQuantity(),
-                l.getUnitCost(),
-                l.getLineTotal()))
-        .toList();
+    List<PurchaseOrderLineResponse> lines =
+        lineRepo.findByPurchaseOrderId(po.getId()).stream()
+            .map(
+                l ->
+                    new PurchaseOrderLineResponse(
+                        l.getId(),
+                        l.getProductId(),
+                        l.getQuantity(),
+                        l.getUnitCost(),
+                        l.getLineTotal()))
+            .toList();
     return new PurchaseOrderResponse(
         po.getId(),
         po.getBusinessId(),

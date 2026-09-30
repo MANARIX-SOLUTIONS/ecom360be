@@ -64,7 +64,8 @@ public class BusinessProfileService {
   }
 
   @Transactional
-  public BusinessProfileResponse updateCatalogMode(BusinessCatalogModeRequest req, UserPrincipal p) {
+  public BusinessProfileResponse updateCatalogMode(
+      BusinessCatalogModeRequest req, UserPrincipal p) {
     requireOwner(p, "Seul le rôle propriétaire peut modifier le mode catalogue");
     Business b = findBusiness(p);
     String mode = req.catalogMode() != null ? req.catalogMode().trim().toUpperCase() : "";

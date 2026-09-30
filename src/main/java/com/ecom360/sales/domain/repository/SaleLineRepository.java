@@ -14,11 +14,10 @@ public interface SaleLineRepository extends JpaRepository<SaleLine, UUID> {
   List<SaleLine> findBySaleId(UUID saleId);
 
   /**
-   * Aggregates units sold and revenue per product across completed sales of a
-   * business over a date range, optionally scoped to a store. Uses the sale
-   * line's denormalized {@code productName}, so no per-product lookup is needed.
-   * Rows are {@code [productId, productName, totalQuantity, totalRevenue]},
-   * ordered by revenue descending.
+   * Aggregates units sold and revenue per product across completed sales of a business over a date
+   * range, optionally scoped to a store. Uses the sale line's denormalized {@code productName}, so
+   * no per-product lookup is needed. Rows are {@code [productId, productName, totalQuantity,
+   * totalRevenue]}, ordered by revenue descending.
    */
   @Query(
       "SELECT sl.productId, sl.productName,"

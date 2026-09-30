@@ -4,9 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Vue globale de toutes les boutiques : KPIs agrégés + répartition par store.
- */
+/** Vue globale de toutes les boutiques : KPIs agrégés + répartition par store. */
 public record GlobalViewResponse(
     LocalDate periodStart,
     LocalDate periodEnd,
@@ -28,6 +26,5 @@ public record GlobalViewResponse(
       double sharePercent,
       long expenses,
       long profit,
-      double expenseSharePercent) {
-  }
+      double expenseSharePercent) {}
 }

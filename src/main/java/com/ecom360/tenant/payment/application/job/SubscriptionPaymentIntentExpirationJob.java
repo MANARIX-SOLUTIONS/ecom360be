@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class SubscriptionPaymentIntentExpirationJob {
 
-  private static final Logger log = LoggerFactory.getLogger(SubscriptionPaymentIntentExpirationJob.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(SubscriptionPaymentIntentExpirationJob.class);
 
   private final SubscriptionCheckoutService checkoutService;
 

@@ -4,10 +4,7 @@ import org.springframework.stereotype.Component;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
-/**
- * Renders classpath templates under {@code templates/mail/} for transactional
- * emails.
- */
+/** Renders classpath templates under {@code templates/mail/} for transactional emails. */
 @Component
 public class MailTemplateRenderer {
 

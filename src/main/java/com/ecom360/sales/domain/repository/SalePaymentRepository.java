@@ -15,14 +15,14 @@ public interface SalePaymentRepository extends JpaRepository<SalePayment, UUID> 
   List<SalePayment> findBySaleIdOrderByCreatedAtAsc(UUID saleId);
 
   /**
-   * Montant réellement encaissé sur la période {@code [start, end)}, optionnellement
-   * limité à une boutique. Contrairement au CA facturé (SUM(sale.total)), ce total
-   * suit la trésorerie.
+   * Montant réellement encaissé sur la période {@code [start, end)}, optionnellement limité à une
+   * boutique. Contrairement au CA facturé (SUM(sale.total)), ce total suit la trésorerie.
    */
-  @Query("SELECT COALESCE(SUM(sp.amount), 0) FROM SalePayment sp"
-      + " WHERE sp.businessId = :bId"
-      + " AND sp.createdAt >= :start AND sp.createdAt < :end"
-      + " AND (:storeId IS NULL OR sp.storeId = :storeId)")
+  @Query(
+      "SELECT COALESCE(SUM(sp.amount), 0) FROM SalePayment sp"
+          + " WHERE sp.businessId = :bId"
+          + " AND sp.createdAt >= :start AND sp.createdAt < :end"
+          + " AND (:storeId IS NULL OR sp.storeId = :storeId)")
   long sumCollectedBetween(
       @Param("bId") UUID businessId,
       @Param("storeId") UUID storeId,

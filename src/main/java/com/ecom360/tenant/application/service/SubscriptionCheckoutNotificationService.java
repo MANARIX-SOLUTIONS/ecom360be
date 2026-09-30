@@ -15,8 +15,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * In-app + email for subscription activation (today: changePlan / admin) and
- * checkout failure (call from PSP intent → failed when T1 checkout exists).
+ * In-app + email for subscription activation (today: changePlan / admin) and checkout failure (call
+ * from PSP intent → failed when T1 checkout exists).
  */
 @Service
 public class SubscriptionCheckoutNotificationService {
@@ -45,9 +45,7 @@ public class SubscriptionCheckoutNotificationService {
       notifyPaidInternal(businessId, planName, billingCycle, periodEnd);
     } catch (Exception e) {
       log.warn(
-          "Checkout paid notification skipped for business {}: {}",
-          businessId,
-          e.getMessage());
+          "Checkout paid notification skipped for business {}: {}", businessId, e.getMessage());
     }
   }
 
@@ -56,9 +54,7 @@ public class SubscriptionCheckoutNotificationService {
       notifyFailedInternal(businessId, reason);
     } catch (Exception e) {
       log.warn(
-          "Checkout failed notification skipped for business {}: {}",
-          businessId,
-          e.getMessage());
+          "Checkout failed notification skipped for business {}: {}", businessId, e.getMessage());
     }
   }
 

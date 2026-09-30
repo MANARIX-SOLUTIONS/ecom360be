@@ -15,6 +15,5 @@ public final class NotificationTypes {
   public static final Set<String> ALL =
       Set.of(LOW_STOCK, PAYMENT_RECEIVED, SUBSCRIPTION, SYSTEM, BILLING, SALE);
 
-  private NotificationTypes() {
-  }
+  private NotificationTypes() {}
 }

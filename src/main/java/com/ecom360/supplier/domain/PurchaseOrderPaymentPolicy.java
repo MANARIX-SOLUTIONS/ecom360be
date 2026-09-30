@@ -4,9 +4,9 @@ import com.ecom360.shared.domain.exception.BusinessRuleException;
 import com.ecom360.supplier.domain.model.PurchaseOrder;
 
 /**
- * Règles du paiement par acompte sur un bon de commande : à la réception, une
- * partie peut être versée au fournisseur, le solde reste une dette. Un acompte
- * omis (null ou 0) conserve le comportement historique : dette égale au total.
+ * Règles du paiement par acompte sur un bon de commande : à la réception, une partie peut être
+ * versée au fournisseur, le solde reste une dette. Un acompte omis (null ou 0) conserve le
+ * comportement historique : dette égale au total.
  */
 public final class PurchaseOrderPaymentPolicy {
 
