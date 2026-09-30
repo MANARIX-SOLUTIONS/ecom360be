@@ -85,8 +85,7 @@ public class SubscriptionUsageService {
     LocalDate now = LocalDate.now(zone);
     Instant start = now.withDayOfMonth(1).atStartOfDay(zone).toInstant();
     Instant end = now.plusMonths(1).withDayOfMonth(1).atStartOfDay(zone).toInstant();
-    long salesThisMonth =
-        saleRepository.countByBusinessIdAndCreatedAtBetween(businessId, start, end);
+    long salesThisMonth = saleRepository.countForQuotaBetween(businessId, start, end);
 
     Optional<Plan> planOpt = subscriptionService.getPlanForBusiness(businessId);
     int usersLimit = planOpt.map(Plan::getMaxUsers).orElse(0);

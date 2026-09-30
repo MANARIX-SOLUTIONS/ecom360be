@@ -20,6 +20,10 @@ public interface SubscriptionPaymentIntentRepository
 
     Optional<SubscriptionPaymentIntent> findByExternalToken(String externalToken);
 
+    /** Scalar lookup: keeps the intent out of the persistence context before locking. */
+    @Query("SELECT i.businessId FROM SubscriptionPaymentIntent i WHERE i.id = :id")
+    Optional<UUID> findBusinessIdById(@Param("id") UUID id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM SubscriptionPaymentIntent i WHERE i.id = :id")
     Optional<SubscriptionPaymentIntent> findByIdForUpdate(@Param("id") UUID id);

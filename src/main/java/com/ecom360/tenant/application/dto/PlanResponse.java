@@ -30,4 +30,5 @@ public record PlanResponse(
     boolean featureStockAlerts,
     boolean featureDeliveryCouriers,
     boolean featureGlobalView,
+    boolean featurePosOnlinePayment,
     int dataRetentionMonths) {}

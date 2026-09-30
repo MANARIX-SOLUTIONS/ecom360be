@@ -3,7 +3,7 @@ package com.ecom360;
 import com.ecom360.identity.infrastructure.security.JwtProperties;
 import com.ecom360.shared.infrastructure.config.AppFilesProperties;
 import com.ecom360.shared.infrastructure.config.CorsProperties;
-import com.ecom360.tenant.payment.infrastructure.config.PaydunyaProperties;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     JwtProperties.class,
     CorsProperties.class,
     AppFilesProperties.class,
-    PaydunyaProperties.class
+    BictorysProperties.class
 })
 public class Ecom360Application {
 

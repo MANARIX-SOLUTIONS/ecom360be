@@ -139,6 +139,7 @@ public class CachedLookups {
         Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
         Boolean.TRUE.equals(plan.getFeatureDeliveryCouriers()),
         Boolean.TRUE.equals(plan.getFeatureGlobalView()),
+        Boolean.TRUE.equals(plan.getFeaturePosOnlinePayment()),
         plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
   }
 }

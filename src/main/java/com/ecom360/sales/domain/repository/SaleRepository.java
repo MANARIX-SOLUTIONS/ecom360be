@@ -24,6 +24,15 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
 
         long countByBusinessIdAndCreatedAtBetween(UUID bId, Instant s, Instant e);
 
+        /** Monthly quota: every sale except those whose digital payment failed. */
+        @Query("SELECT COUNT(s) FROM Sale s WHERE s.businessId = :bId"
+                        + " AND s.status <> 'payment_failed'"
+                        + " AND s.createdAt >= :start AND s.createdAt < :end")
+        long countForQuotaBetween(
+                        @Param("bId") UUID businessId,
+                        @Param("start") Instant start,
+                        @Param("end") Instant end);
+
         long countByBusinessIdAndStoreIdAndCreatedAtBetween(
                         UUID bId, UUID storeId, Instant start, Instant end);
 
@@ -106,9 +115,14 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
                         @Param("start") Instant start,
                         @Param("end") Instant end);
 
+        /**
+         * Without a status filter, POS digital sales still awaiting payment or whose
+         * payment failed are hidden: they are not sales yet (or anymore).
+         */
         @Query("SELECT s FROM Sale s WHERE s.businessId = :bId "
                         + "AND (:storeId IS NULL OR s.storeId = :storeId) "
-                        + "AND (:status IS NULL OR s.status = :status) "
+                        + "AND ((:status IS NULL AND s.status NOT IN ('pending_payment', 'payment_failed'))"
+                        + " OR s.status = :status) "
                         + "AND (:paymentStatus IS NULL OR s.paymentStatus = :paymentStatus) "
                         + "AND (:clientId IS NULL OR s.clientId = :clientId) "
                         + "AND (CAST(:from AS timestamp) IS NULL OR s.createdAt >= :from) "

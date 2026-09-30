@@ -23,11 +23,20 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class SubscriptionService {
+
+  private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
 
   private static final int TRIAL_DAYS = 14;
 
@@ -37,6 +46,7 @@ public class SubscriptionService {
   private final RolePermissionService permissionService;
   private final SubscriptionCheckoutNotificationService checkoutNotificationService;
   private final CachedLookups cachedLookups;
+  private final TransactionTemplate requiresNewTx;
 
   public SubscriptionService(
       SubscriptionRepository subscriptionRepository,
@@ -44,13 +54,16 @@ public class SubscriptionService {
       BusinessRepository businessRepository,
       RolePermissionService permissionService,
       SubscriptionCheckoutNotificationService checkoutNotificationService,
-      CachedLookups cachedLookups) {
+      CachedLookups cachedLookups,
+      PlatformTransactionManager transactionManager) {
     this.subscriptionRepository = subscriptionRepository;
     this.planRepository = planRepository;
     this.businessRepository = businessRepository;
     this.permissionService = permissionService;
     this.checkoutNotificationService = checkoutNotificationService;
     this.cachedLookups = cachedLookups;
+    this.requiresNewTx = new TransactionTemplate(transactionManager);
+    this.requiresNewTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
 
   /**
@@ -139,6 +152,22 @@ public class SubscriptionService {
             businessId, SubscriptionStatus.ACCESS_GRANTING)
         .filter(this::notExpiredOrExpireLazy)
         .flatMap(sub -> planRepository.findById(sub.getPlanId()));
+  }
+
+  public static final String POS_ONLINE_PAYMENT_FORBIDDEN =
+      "Paiement Wave / Orange Money en ligne réservé au plan Business";
+
+  public boolean hasPosOnlinePayment(UUID businessId) {
+    return getPlanForBusiness(businessId)
+        .map(plan -> Boolean.TRUE.equals(plan.getFeaturePosOnlinePayment()))
+        .orElse(false);
+  }
+
+  /** Unlike other plan checks, denies when no access-granting subscription exists. */
+  public void requirePosOnlinePayment(UUID businessId) {
+    if (!hasPosOnlinePayment(businessId)) {
+      throw new BusinessRuleException(POS_ONLINE_PAYMENT_FORBIDDEN);
+    }
   }
 
   /**
@@ -295,10 +324,38 @@ public class SubscriptionService {
               businessRepository.save(biz);
             });
 
-    checkoutNotificationService.notifyPaid(
-        businessId, plan.getName(), cycle, end);
+    notifyPaidAfterCommit(businessId, plan.getName(), cycle, end);
 
     return sub;
+  }
+
+  /**
+   * Notifications and emails must not hold the payment row lock nor go out for a
+   * rolled-back activation. After commit the original transaction can no longer
+   * persist, hence the separate REQUIRES_NEW transaction.
+   */
+  private void notifyPaidAfterCommit(
+      UUID businessId, String planName, String cycle, LocalDate end) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      checkoutNotificationService.notifyPaid(businessId, planName, cycle, end);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            try {
+              requiresNewTx.executeWithoutResult(
+                  status -> checkoutNotificationService.notifyPaid(
+                      businessId, planName, cycle, end));
+            } catch (RuntimeException e) {
+              log.warn(
+                  "Paid notification failed after commit for business {}: {}",
+                  businessId,
+                  e.getMessage());
+            }
+          }
+        });
   }
 
   public SubscriptionResponse toSubscriptionResponsePublic(Subscription sub) {
@@ -442,6 +499,7 @@ public class SubscriptionService {
         Boolean.TRUE.equals(plan.getFeatureStockAlerts()),
         Boolean.TRUE.equals(plan.getFeatureDeliveryCouriers()),
         Boolean.TRUE.equals(plan.getFeatureGlobalView()),
+        Boolean.TRUE.equals(plan.getFeaturePosOnlinePayment()),
         plan.getDataRetentionMonths() != null ? plan.getDataRetentionMonths() : 0);
   }
 

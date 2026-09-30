@@ -85,6 +85,9 @@ public class Plan extends BaseEntity {
   @Column(name = "feature_global_view", nullable = false)
   private Boolean featureGlobalView = false;
 
+  @Column(name = "feature_pos_online_payment", nullable = false)
+  private Boolean featurePosOnlinePayment = false;
+
   @Column(name = "data_retention_months", nullable = false)
   private Integer dataRetentionMonths = 0;
 
@@ -301,6 +304,14 @@ public class Plan extends BaseEntity {
 
   public void setFeatureGlobalView(Boolean v) {
     this.featureGlobalView = v;
+  }
+
+  public Boolean getFeaturePosOnlinePayment() {
+    return featurePosOnlinePayment;
+  }
+
+  public void setFeaturePosOnlinePayment(Boolean v) {
+    this.featurePosOnlinePayment = v;
   }
 
   public Integer getDataRetentionMonths() {

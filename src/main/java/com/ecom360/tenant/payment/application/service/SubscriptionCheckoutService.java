@@ -25,11 +25,15 @@ import com.ecom360.tenant.payment.domain.PaymentIntentNotFoundException;
 import com.ecom360.tenant.payment.domain.model.SubscriptionPaymentIntent;
 import com.ecom360.tenant.payment.domain.model.SubscriptionPaymentStatus;
 import com.ecom360.tenant.payment.domain.repository.SubscriptionPaymentIntentRepository;
-import com.ecom360.tenant.payment.infrastructure.config.PaydunyaProperties;
-import com.ecom360.tenant.payment.infrastructure.paydunya.PaydunyaCheckoutResult;
-import com.ecom360.tenant.payment.infrastructure.paydunya.PaydunyaClient;
-import com.ecom360.tenant.payment.infrastructure.paydunya.PaydunyaConfirmResult;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysChargeResult;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysClient;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysProperties;
+import com.ecom360.tenant.payment.infrastructure.bictorys.BictorysStatusResult;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -55,16 +59,22 @@ public class SubscriptionCheckoutService {
    */
   public static final int PENDING_INTENT_TTL_HOURS = 48;
 
+  public static final String PROVIDER = "bictorys";
+
+  private static final int CHECKOUT_URL_MAX = 1000;
+
   private final SubscriptionPaymentIntentRepository intentRepository;
   private final SubscriptionService subscriptionService;
   private final PlanRepository planRepository;
   private final BusinessRepository businessRepository;
   private final InvoiceRepository invoiceRepository;
   private final UserRepository userRepository;
-  private final PaydunyaClient paydunyaClient;
-  private final PaydunyaProperties paydunyaProperties;
+  private final BictorysClient bictorysClient;
+  private final BictorysProperties bictorysProperties;
   private final RolePermissionService permissionService;
   private final AuditLogService auditLogService;
+  private final ObjectMapper objectMapper;
+  private final EntityManager entityManager;
   private final String appUrl;
 
   public SubscriptionCheckoutService(
@@ -74,10 +84,12 @@ public class SubscriptionCheckoutService {
       BusinessRepository businessRepository,
       InvoiceRepository invoiceRepository,
       UserRepository userRepository,
-      PaydunyaClient paydunyaClient,
-      PaydunyaProperties paydunyaProperties,
+      BictorysClient bictorysClient,
+      BictorysProperties bictorysProperties,
       RolePermissionService permissionService,
       AuditLogService auditLogService,
+      ObjectMapper objectMapper,
+      EntityManager entityManager,
       @Value("${app.url:http://localhost:5173}") String appUrl) {
     this.intentRepository = intentRepository;
     this.subscriptionService = subscriptionService;
@@ -85,10 +97,12 @@ public class SubscriptionCheckoutService {
     this.businessRepository = businessRepository;
     this.invoiceRepository = invoiceRepository;
     this.userRepository = userRepository;
-    this.paydunyaClient = paydunyaClient;
-    this.paydunyaProperties = paydunyaProperties;
+    this.bictorysClient = bictorysClient;
+    this.bictorysProperties = bictorysProperties;
     this.permissionService = permissionService;
     this.auditLogService = auditLogService;
+    this.objectMapper = objectMapper;
+    this.entityManager = entityManager;
     this.appUrl = appUrl;
   }
 
@@ -108,7 +122,9 @@ public class SubscriptionCheckoutService {
         .findById(p.businessId())
         .orElseThrow(() -> new ResourceNotFoundException("Business", p.businessId()));
 
-    String returnUrl = trimSlash(appUrl) + "/settings/subscription?checkout=";
+    String redirectBase = bictorysProperties.getRedirectBaseUrl();
+    String returnUrl = trimSlash(redirectBase == null || redirectBase.isBlank() ? appUrl : redirectBase)
+        + "/settings/subscription?checkout=";
 
     SubscriptionPaymentIntent intent = new SubscriptionPaymentIntent();
     intent.setBusinessId(p.businessId());
@@ -116,7 +132,7 @@ public class SubscriptionCheckoutService {
     intent.setBillingCycle(cycle);
     intent.setAmount(amount);
     intent.setCurrency("XOF");
-    intent.setProvider("paydunya");
+    intent.setProvider(PROVIDER);
     intent.setPreferredChannel(channel);
     intent.setStatus(SubscriptionPaymentStatus.PENDING);
     intent.setCreatedByUserId(p.userId());
@@ -126,20 +142,13 @@ public class SubscriptionCheckoutService {
     intent.setReturnUrl(returnUrl);
 
     User user = userRepository.findById(p.userId()).orElse(null);
-    String description = "Abonnement Ecom 360 PME — "
-        + plan.getName()
-        + " ("
-        + cycle
-        + ") — "
-        + business.getName();
 
-    PaydunyaCheckoutResult checkout;
+    BictorysChargeResult charge;
     try {
-      checkout = paydunyaClient.createCheckoutInvoice(
+      charge = bictorysClient.createCharge(
           amount,
-          description,
           channel,
-          intent.getId(),
+          intent.getId().toString(),
           returnUrl,
           returnUrl + "&cancelled=1",
           user != null ? user.getFullName() : business.getName(),
@@ -151,8 +160,9 @@ public class SubscriptionCheckoutService {
       throw e;
     }
 
-    intent.setExternalToken(checkout.token());
-    intent.setCheckoutUrl(checkout.checkoutUrl());
+    intent.setExternalToken(charge.transactionId());
+    intent.setCheckoutUrl(fitCheckoutUrl(charge.link(), charge.redirectUrl()));
+    intent.setMetadata(buildChargeMetadata(charge));
     intent = intentRepository.save(intent);
 
     auditLogService.log(
@@ -175,10 +185,10 @@ public class SubscriptionCheckoutService {
   public SubscriptionCheckoutResponse getCheckoutStatus(UUID intentId, UserPrincipal p) {
     requireBiz(p);
     permissionService.require(p, Permission.SUBSCRIPTION_READ);
-    requireIntentForBusiness(intentId, p.businessId());
+    requireIntentOwnership(intentId, p.businessId());
 
-    if (paydunyaProperties.isEnabled()) {
-      trySyncPendingFromPaydunya(intentId, p.userId());
+    if (bictorysProperties.isEnabled()) {
+      trySyncPendingFromBictorys(intentId, p.userId());
     }
 
     SubscriptionPaymentIntent intent = intentRepository
@@ -208,80 +218,76 @@ public class SubscriptionCheckoutService {
             }));
   }
 
+  /**
+   * Handles a Bictorys webhook payload. The caller must have verified the
+   * signature ({@link BictorysClient#verifyWebhook}) beforehand.
+   */
   @Transactional
-  public void handlePaydunyaIpn(JsonNode dataNode) {
-    if (dataNode == null || dataNode.isNull()) {
-      throw new BusinessRuleException("IPN PayDunya invalide");
+  public void handleBictorysWebhook(JsonNode payload) {
+    if (payload == null || payload.isNull() || !payload.isObject()) {
+      throw new BusinessRuleException("Webhook Bictorys invalide");
     }
-    String hash = text(dataNode, "hash");
-    if (!paydunyaClient.verifyMasterKeyHash(hash)) {
-      throw new AccessDeniedException("Hash IPN PayDunya invalide");
+    String type = text(payload, "type");
+    if (type != null && !"payment".equalsIgnoreCase(type)) {
+      log.info("Bictorys webhook ignored (type={})", type);
+      return;
     }
 
-    String status = text(dataNode, "status");
-    String token = null;
-    JsonNode invoiceNode = dataNode.path("invoice");
-    if (invoiceNode.isObject()) {
-      token = text(invoiceNode, "token");
-    }
-    if (token == null || token.isBlank()) {
-      token = text(dataNode, "token");
+    String status = text(payload, "status");
+    String transactionId = text(payload, "id");
+    String reference = text(payload, "paymentReference");
+    if (reference == null || reference.isBlank()) {
+      reference = text(payload, "merchantReference");
     }
 
     UUID intentId = null;
-    JsonNode custom = dataNode.path("custom_data");
-    if (custom.isObject()) {
-      String raw = text(custom, "intent_id");
-      if (raw != null && !raw.isBlank()) {
-        try {
-          intentId = UUID.fromString(raw);
-        } catch (IllegalArgumentException ignored) {
-          // fall through to token lookup
-        }
+    if (reference != null && !reference.isBlank()) {
+      try {
+        intentId = UUID.fromString(reference.trim());
+      } catch (IllegalArgumentException ignored) {
+        // fall through to transaction id lookup
       }
     }
 
-    Integer paidAmount = intOrNull(dataNode, "total_amount");
-    if (paidAmount == null && invoiceNode.isObject()) {
-      paidAmount = intOrNull(invoiceNode, "total_amount");
-    }
-
-    SubscriptionPaymentIntent locked = lockIntent(intentId, token);
+    SubscriptionPaymentIntent locked = lockIntent(intentId, transactionId);
     if (locked == null) {
       throw new PaymentIntentNotFoundException(
-          "PayDunya IPN: intent not found (token=" + token + ")");
+          "Bictorys webhook: intent not found (ref=" + reference + ", id=" + transactionId + ")");
     }
 
     if (locked.isPaid()) {
       return;
     }
 
-    if (status != null && "completed".equalsIgnoreCase(status)) {
-      if (token != null) {
-        locked.setExternalToken(token);
+    if (BictorysStatusResult.isSucceeded(status)) {
+      String currency = text(payload, "currency");
+      if (currency != null && !currency.equalsIgnoreCase(locked.getCurrency())) {
+        String msg = "Devise du paiement (" + currency + ") différente de l'intention ("
+            + locked.getCurrency() + ")";
+        locked.markFailed(msg);
+        intentRepository.save(locked);
+        throw new BusinessRuleException(msg);
       }
-      fulfillLockedIntent(locked, "paydunya_ipn", null, null, paidAmount);
+      if (transactionId != null) {
+        locked.setExternalToken(transactionId);
+      }
+      fulfillLockedIntent(
+          locked, "bictorys_webhook", null, null, intOrNull(payload, "amount"));
       return;
     }
 
-    if (status != null) {
-      String s = status.toLowerCase();
-      if ("failed".equals(s) || "cancelled".equals(s) || "canceled".equals(s)) {
-        if (locked.isPending()) {
-          locked.markFailed(
-              text(dataNode, "fail_reason") != null ? text(dataNode, "fail_reason") : status);
-          intentRepository.save(locked);
-        }
-      }
+    if (BictorysStatusResult.isFailed(status) && locked.isPending()) {
+      locked.markFailed("Paiement " + status);
+      intentRepository.save(locked);
     }
   }
 
   @Transactional
   public AdminSubscriptionPaymentResponse markPaid(
       UUID intentId, String note, UserPrincipal admin) {
-    SubscriptionPaymentIntent locked = intentRepository
+    SubscriptionPaymentIntent locked = fresh(intentRepository
         .findByIdForUpdate(intentId)
-        .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
+        .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId)));
     if (locked.isPaid()) {
       return toAdminResponse(locked);
     }
@@ -319,27 +325,60 @@ public class SubscriptionCheckoutService {
     return stale.size();
   }
 
-  private void trySyncPendingFromPaydunya(UUID intentId, UUID actorUserId) {
-    SubscriptionPaymentIntent locked = intentRepository.findByIdForUpdate(intentId).orElse(null);
-    if (locked == null || !locked.isPending() || locked.getExternalToken() == null) {
+  private void trySyncPendingFromBictorys(UUID intentId, UUID actorUserId) {
+    SubscriptionPaymentIntent locked = fresh(intentRepository.findByIdForUpdate(intentId).orElse(null));
+    if (locked == null
+        || !locked.isPending()
+        || locked.getExternalToken() == null
+        || !PROVIDER.equals(locked.getProvider())) {
       return;
     }
     try {
-      PaydunyaConfirmResult confirm = paydunyaClient.confirmInvoice(locked.getExternalToken());
-      if (!paydunyaClient.verifyMasterKeyHash(confirm.hash())) {
-        log.warn("PayDunya confirm hash invalid for intent {}", intentId);
-        return;
-      }
-      if (confirm.isCompleted()) {
-        fulfillLockedIntent(
-            locked, "paydunya_confirm", actorUserId, null, confirm.totalAmount());
-      } else if (confirm.isFailedOrCancelled()) {
-        locked.markFailed(
-            confirm.failReason() != null ? confirm.failReason() : confirm.status());
+      BictorysStatusResult result = bictorysClient.getStatus(locked.getExternalToken());
+      if (result.isSucceeded()) {
+        fulfillLockedIntent(locked, "bictorys_status", actorUserId, null, result.amount());
+      } else if (result.isFailed()) {
+        locked.markFailed("Paiement " + result.status());
         intentRepository.save(locked);
       }
     } catch (BusinessRuleException e) {
-      log.debug("Confirm poll skipped: {}", e.getMessage());
+      log.debug("Status poll skipped: {}", e.getMessage());
+    }
+  }
+
+  /** {@code checkout_url} is VARCHAR(1000); the full link stays in metadata. */
+  static String fitCheckoutUrl(String link, String redirectUrl) {
+    for (String candidate : new String[] { link, redirectUrl }) {
+      if (candidate != null && !candidate.isBlank() && candidate.length() <= CHECKOUT_URL_MAX) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private String buildChargeMetadata(BictorysChargeResult charge) {
+    ObjectNode node = objectMapper.createObjectNode();
+    node.put("transactionId", charge.transactionId());
+    node.put("redirectUrl", charge.redirectUrl());
+    node.put("link", charge.link());
+    node.put("qrCode", charge.qrCode());
+    node.put("message", charge.message());
+    try {
+      return objectMapper.writeValueAsString(node);
+    } catch (Exception e) {
+      log.warn("Unable to serialize charge metadata: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  private JsonNode readMetadata(SubscriptionPaymentIntent intent) {
+    if (intent.getMetadata() == null || intent.getMetadata().isBlank()) {
+      return null;
+    }
+    try {
+      return objectMapper.readTree(intent.getMetadata());
+    } catch (Exception e) {
+      return null;
     }
   }
 
@@ -347,11 +386,11 @@ public class SubscriptionCheckoutService {
     if (intentId != null) {
       SubscriptionPaymentIntent byId = intentRepository.findByIdForUpdate(intentId).orElse(null);
       if (byId != null) {
-        return byId;
+        return fresh(byId);
       }
     }
     if (token != null && !token.isBlank()) {
-      return intentRepository.findByExternalTokenForUpdate(token).orElse(null);
+      return fresh(intentRepository.findByExternalTokenForUpdate(token).orElse(null));
     }
     return null;
   }
@@ -376,7 +415,7 @@ public class SubscriptionCheckoutService {
     }
 
     if (paidAmount != null && !paidAmount.equals(intent.getAmount())) {
-      String msg = "Montant PayDunya ("
+      String msg = "Montant payé ("
           + paidAmount
           + ") différent de l'intention ("
           + intent.getAmount()
@@ -459,18 +498,40 @@ public class SubscriptionCheckoutService {
     return "SUB-" + LocalDate.now() + "-" + suffix + "-" + unique;
   }
 
-  private SubscriptionPaymentIntent requireIntentForBusiness(UUID intentId, UUID businessId) {
-    SubscriptionPaymentIntent intent = intentRepository
-        .findById(intentId)
+  /**
+   * Must not load the entity: a managed PENDING copy would be returned as-is by
+   * the later SELECT ... FOR UPDATE, even after a concurrent webhook marked it paid.
+   */
+  private void requireIntentOwnership(UUID intentId, UUID businessId) {
+    UUID owner = intentRepository
+        .findBusinessIdById(intentId)
         .orElseThrow(() -> new ResourceNotFoundException("PaymentIntent", intentId));
-    if (!intent.getBusinessId().equals(businessId)) {
+    if (!owner.equals(businessId)) {
       throw new AccessDeniedException("Payment intent does not belong to this business");
+    }
+  }
+
+  /** Re-reads the row under the lock so the state checked is never a stale session copy. */
+  private SubscriptionPaymentIntent fresh(SubscriptionPaymentIntent intent) {
+    if (intent != null && entityManager.contains(intent)) {
+      entityManager.refresh(intent, LockModeType.PESSIMISTIC_WRITE);
     }
     return intent;
   }
 
   private SubscriptionCheckoutResponse toCheckoutResponse(
       SubscriptionPaymentIntent intent, String planSlug) {
+    String qrCode = null;
+    String paymentLink = null;
+    String ussdMessage = null;
+    if (intent.isPending()) {
+      JsonNode meta = readMetadata(intent);
+      if (meta != null) {
+        qrCode = text(meta, "qrCode");
+        paymentLink = text(meta, "link");
+        ussdMessage = text(meta, "message");
+      }
+    }
     return new SubscriptionCheckoutResponse(
         intent.getId(),
         intent.getStatus(),
@@ -484,7 +545,10 @@ public class SubscriptionCheckoutService {
         intent.getSubscriptionId(),
         intent.getInvoiceId(),
         intent.getFailureReason(),
-        intent.getPaidAt());
+        intent.getPaidAt(),
+        qrCode,
+        paymentLink,
+        ussdMessage);
   }
 
   private AdminSubscriptionPaymentResponse toAdminResponse(SubscriptionPaymentIntent intent) {

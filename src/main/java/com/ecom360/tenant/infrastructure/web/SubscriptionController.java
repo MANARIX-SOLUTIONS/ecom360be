@@ -72,7 +72,7 @@ public class SubscriptionController {
   }
 
   @PostMapping("/checkout")
-  @Operation(summary = "Start paid subscription checkout (Wave / Orange Money via PayDunya)")
+  @Operation(summary = "Start paid subscription checkout (Wave / Orange Money via Bictorys)")
   public ResponseEntity<SubscriptionCheckoutResponse> checkout(
       @Valid @RequestBody CreateSubscriptionCheckoutRequest req,
       @AuthenticationPrincipal UserPrincipal p) {

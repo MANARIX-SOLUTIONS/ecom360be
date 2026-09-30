@@ -35,7 +35,7 @@ public class SubscriptionPaymentIntent {
   private String currency = "XOF";
 
   @Column(nullable = false)
-  private String provider = "paydunya";
+  private String provider = "bictorys";
 
   @Column(name = "preferred_channel", nullable = false)
   private String preferredChannel;

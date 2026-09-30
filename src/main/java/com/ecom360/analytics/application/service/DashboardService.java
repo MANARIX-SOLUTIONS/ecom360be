@@ -12,6 +12,7 @@ import com.ecom360.identity.domain.model.Permission;
 import com.ecom360.identity.infrastructure.security.UserPrincipal;
 import com.ecom360.inventory.domain.model.ProductStoreStock;
 import com.ecom360.inventory.domain.repository.ProductStoreStockRepository;
+import com.ecom360.sales.domain.model.Sale;
 import com.ecom360.sales.domain.repository.SaleLineRepository;
 import com.ecom360.sales.domain.repository.SalePaymentRepository;
 import com.ecom360.sales.domain.repository.SaleRepository;
@@ -150,6 +151,7 @@ public class DashboardService {
             bId, storeId, PageRequest.of(0, 50))
         : saleRepo.findByBusinessIdOrderByCreatedAtDesc(bId, PageRequest.of(0, 50));
     List<DashboardResponse.RecentSale> recent = recentPage.stream()
+        .filter(s -> !s.isPendingPayment() && !Sale.STATUS_PAYMENT_FAILED.equals(s.getStatus()))
         .filter(
             s -> !limitedAnalytics
                 || (!s.getCreatedAt().isBefore(todayStart)

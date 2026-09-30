@@ -68,12 +68,38 @@ public class Sale {
     createdAt = Instant.now();
   }
 
+  public static final String STATUS_COMPLETED = "completed";
+  public static final String STATUS_VOIDED = "voided";
+  /** Wave / OM initiated through Bictorys, stock already reserved, not yet paid. */
+  public static final String STATUS_PENDING_PAYMENT = "pending_payment";
+  /**
+   * Digital payment failed, expired or was cancelled; stock was released. Unlike
+   * {@link #STATUS_VOIDED}, it does not count toward the monthly sales quota.
+   */
+  public static final String STATUS_PAYMENT_FAILED = "payment_failed";
+
   public void markVoided() {
-    this.status = "voided";
+    this.status = STATUS_VOIDED;
+  }
+
+  public void markPendingPayment() {
+    this.status = STATUS_PENDING_PAYMENT;
+  }
+
+  public void markPaymentFailed() {
+    this.status = STATUS_PAYMENT_FAILED;
+  }
+
+  public void markCompleted() {
+    this.status = STATUS_COMPLETED;
   }
 
   public boolean isCompleted() {
-    return "completed".equals(status);
+    return STATUS_COMPLETED.equals(status);
+  }
+
+  public boolean isPendingPayment() {
+    return STATUS_PENDING_PAYMENT.equals(status);
   }
 
   public boolean isCreditSale() {

@@ -79,18 +79,7 @@ public class SaleService {
     UUID clientId = requireClientForPosSale(
         req.clientId(), p.businessId(), req.paymentMethod());
 
-    List<LineSpec> specs = new ArrayList<>();
-    for (SaleLineRequest lr : req.lines()) {
-      Product prod = productRepo
-          .findByBusinessIdAndId(p.businessId(), lr.productId())
-          .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
-      Integer salePv = prod.getSalePrice();
-      if (salePv == null || salePv <= 0) {
-        throw new BusinessRuleException(
-            "Prix de vente manquant ou invalide pour le produit « " + prod.getName() + " ».");
-      }
-      specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), salePv));
-    }
+    List<LineSpec> specs = buildPosLineSpecs(p.businessId(), req.lines());
     return persistSaleFromLineSpecs(
         p.businessId(),
         req.storeId(),
@@ -103,6 +92,119 @@ public class SaleService {
         req.dueDate(),
         req.note(),
         specs);
+  }
+
+  /**
+   * Vente POS Wave / Orange Money initiée via Bictorys : le stock est décrémenté
+   * tout de suite, mais rien n'est encaissé ni notifié tant que le paiement n'est
+   * pas confirmé ({@link #completePendingPaymentSale}).
+   */
+  @Transactional
+  public Sale createPendingPaymentSale(
+      UUID storeId,
+      UUID requestedClientId,
+      String channel,
+      int discountAmount,
+      String note,
+      List<SaleLineRequest> lines,
+      UserPrincipal p) {
+    requireBiz(p);
+    permissionService.require(p, Permission.SALES_CREATE);
+    validateSubscriptionForSale(p.businessId(), channel);
+    storeRepo
+        .findById(storeId)
+        .filter(s -> s.belongsTo(p.businessId()))
+        .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+    UUID clientId = requireClientForPosSale(requestedClientId, p.businessId(), channel);
+    List<LineSpec> specs = buildPosLineSpecs(p.businessId(), lines);
+    return persistSale(
+        p.businessId(),
+        storeId,
+        p.userId(),
+        clientId,
+        channel,
+        discountAmount,
+        null,
+        null,
+        null,
+        note,
+        specs,
+        true);
+  }
+
+  /** Idempotent: a sale already completed is returned unchanged. */
+  @Transactional
+  public Sale completePendingPaymentSale(
+      UUID businessId, UUID saleId, UUID actorUserId, String note) {
+    Sale sale = saleRepo
+        .findByBusinessIdAndId(businessId, saleId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sale", saleId));
+    if (sale.isCompleted()) {
+      return sale;
+    }
+    if (!sale.isPendingPayment()) {
+      throw new BusinessRuleException(
+          "La vente n'est plus en attente de paiement (statut " + sale.getStatus() + ").");
+    }
+    sale.markCompleted();
+    sale.setAmountPaid(sale.getTotal());
+    sale.recomputePaymentStatus();
+    sale.setDueDate(null);
+    sale = saleRepo.save(sale);
+    if (sale.getTotal() > 0) {
+      salePaymentRepo.save(
+          SalePayment.record(
+              sale,
+              actorUserId != null ? actorUserId : sale.getUserId(),
+              sale.getTotal(),
+              sale.getPaymentMethod(),
+              SalePaymentKind.DEPOSIT,
+              note));
+    }
+    notifyDigitalPaymentReceived(sale);
+    return sale;
+  }
+
+  /** Releases the reserved stock of a sale whose digital payment did not go through. */
+  @Transactional
+  public void failPendingPaymentSale(UUID businessId, UUID saleId, UUID actorUserId) {
+    Sale sale = saleRepo
+        .findByBusinessIdAndId(businessId, saleId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sale", saleId));
+    if (!sale.isPendingPayment()) {
+      return;
+    }
+    sale.markPaymentFailed();
+    UUID actor = actorUserId != null ? actorUserId : sale.getUserId();
+    for (SaleLine line : lineRepo.findBySaleId(sale.getId())) {
+      stockService.updateStockForPurchase(
+          line.getProductId(),
+          sale.getStoreId(),
+          actor,
+          line.getQuantity(),
+          "PAYFAIL-" + sale.getReceiptNumber());
+    }
+    saleRepo.save(sale);
+  }
+
+  public SaleResponse toResponse(Sale sale) {
+    return mapSale(sale);
+  }
+
+  private List<LineSpec> buildPosLineSpecs(UUID businessId, List<SaleLineRequest> lines) {
+    List<LineSpec> specs = new ArrayList<>();
+    for (SaleLineRequest lr : lines) {
+      Product prod = productRepo
+          .findByBusinessIdAndId(businessId, lr.productId())
+          .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
+      Integer salePv = prod.getSalePrice();
+      if (salePv == null || salePv <= 0) {
+        throw new BusinessRuleException(
+            "Prix de vente manquant ou invalide pour le produit « " + prod.getName() + " ».");
+      }
+      specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), salePv));
+    }
+    return specs;
   }
 
   /**
@@ -163,7 +265,7 @@ public class SaleService {
                 LocalDate now = LocalDate.now(zone);
                 Instant start = now.withDayOfMonth(1).atStartOfDay(zone).toInstant();
                 Instant end = now.plusMonths(1).withDayOfMonth(1).atStartOfDay(zone).toInstant();
-                long count = saleRepo.countByBusinessIdAndCreatedAtBetween(businessId, start, end);
+                long count = saleRepo.countForQuotaBetween(businessId, start, end);
                 if (count >= plan.getMaxSalesPerMonth()) {
                   throw new BusinessRuleException(
                       "Limite du plan atteinte : maximum "
@@ -208,6 +310,35 @@ public class SaleService {
       LocalDate dueDate,
       String note,
       List<LineSpec> lineSpecs) {
+    return mapSale(
+        persistSale(
+            businessId,
+            storeId,
+            userId,
+            clientId,
+            paymentMethod,
+            discountAmount,
+            amountReceived,
+            requestedAmountPaid,
+            dueDate,
+            note,
+            lineSpecs,
+            false));
+  }
+
+  private Sale persistSale(
+      UUID businessId,
+      UUID storeId,
+      UUID userId,
+      UUID clientId,
+      String paymentMethod,
+      int discountAmount,
+      Integer amountReceived,
+      Integer requestedAmountPaid,
+      LocalDate dueDate,
+      String note,
+      List<LineSpec> lineSpecs,
+      boolean pendingPayment) {
     Sale sale = new Sale();
     sale.setBusinessId(businessId);
     sale.setStoreId(storeId);
@@ -218,7 +349,11 @@ public class SaleService {
     sale.setDueDate(dueDate);
     sale.setNote(note);
     sale.setReceiptNumber(generateReceiptNumber());
-    sale.setStatus("completed");
+    if (pendingPayment) {
+      sale.markPendingPayment();
+    } else {
+      sale.markCompleted();
+    }
     sale.setSubtotal(0);
     sale.setTotal(0);
     sale.setAmountPaid(0);
@@ -240,6 +375,11 @@ public class SaleService {
     }
     sale.setSubtotal(subtotal);
     sale.setTotal(subtotal - discountAmount);
+    if (pendingPayment) {
+      sale.setAmountPaid(0);
+      sale.recomputePaymentStatus();
+      return saleRepo.save(sale);
+    }
     if (amountReceived != null) {
       sale.setAmountReceived(amountReceived);
       sale.setChangeGiven(Math.max(0, amountReceived - sale.getTotal()));
@@ -273,7 +413,7 @@ public class SaleService {
               sale, userId, amountPaid, paymentMethod, SalePaymentKind.DEPOSIT, null));
     }
     notifyDigitalPaymentReceived(sale);
-    return mapSale(sale);
+    return sale;
   }
 
   /**
@@ -348,6 +488,7 @@ public class SaleService {
       throw new BusinessRuleException(
           "Cette vente est hors de la période d'historique de votre plan.");
     }
+    rejectPendingPayment(sale);
     if (!sale.isCompleted()) {
       throw new BusinessRuleException("Seules les ventes validées peuvent être modifiées.");
     }
@@ -492,6 +633,7 @@ public class SaleService {
       throw new BusinessRuleException(
           "Cette vente est hors de la période d'historique de votre plan.");
     }
+    rejectPendingPayment(sale);
     if (!sale.isCompleted())
       throw new BusinessRuleException("Seules les ventes validées peuvent être annulées.");
     sale.markVoided();
@@ -629,6 +771,13 @@ public class SaleService {
         s.getNote(),
         lines,
         s.getCreatedAt());
+  }
+
+  private static void rejectPendingPayment(Sale sale) {
+    if (sale.isPendingPayment()) {
+      throw new BusinessRuleException(
+          "Vente en attente de paiement Wave / Orange Money : annulez le paiement depuis le POS.");
+    }
   }
 
   private void requireBiz(UserPrincipal p) {
