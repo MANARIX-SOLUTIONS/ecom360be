@@ -41,24 +41,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SubscriptionCheckoutServiceTest {
 
-  @Mock
-  SubscriptionPaymentIntentRepository intentRepository;
-  @Mock
-  SubscriptionService subscriptionService;
-  @Mock
-  PlanRepository planRepository;
-  @Mock
-  BusinessRepository businessRepository;
-  @Mock
-  InvoiceRepository invoiceRepository;
-  @Mock
-  UserRepository userRepository;
-  @Mock
-  PaydunyaClient paydunyaClient;
-  @Mock
-  RolePermissionService permissionService;
-  @Mock
-  AuditLogService auditLogService;
+  @Mock SubscriptionPaymentIntentRepository intentRepository;
+  @Mock SubscriptionService subscriptionService;
+  @Mock PlanRepository planRepository;
+  @Mock BusinessRepository businessRepository;
+  @Mock InvoiceRepository invoiceRepository;
+  @Mock UserRepository userRepository;
+  @Mock PaydunyaClient paydunyaClient;
+  @Mock RolePermissionService permissionService;
+  @Mock AuditLogService auditLogService;
 
   PaydunyaProperties paydunyaProperties = new PaydunyaProperties();
   SubscriptionCheckoutService service;
@@ -72,18 +63,19 @@ class SubscriptionCheckoutServiceTest {
   void setUp() {
     paydunyaProperties.setEnabled(true);
     paydunyaProperties.setMasterKey("master");
-    service = new SubscriptionCheckoutService(
-        intentRepository,
-        subscriptionService,
-        planRepository,
-        businessRepository,
-        invoiceRepository,
-        userRepository,
-        paydunyaClient,
-        paydunyaProperties,
-        permissionService,
-        auditLogService,
-        "http://localhost:5173");
+    service =
+        new SubscriptionCheckoutService(
+            intentRepository,
+            subscriptionService,
+            planRepository,
+            businessRepository,
+            invoiceRepository,
+            userRepository,
+            paydunyaClient,
+            paydunyaProperties,
+            permissionService,
+            auditLogService,
+            "http://localhost:5173");
   }
 
   @Test
@@ -167,8 +159,7 @@ class SubscriptionCheckoutServiceTest {
     data.put("hash", "bad");
     data.put("status", "completed");
 
-    assertThatThrownBy(() -> service.handlePaydunyaIpn(data))
-        .hasMessageContaining("Hash");
+    assertThatThrownBy(() -> service.handlePaydunyaIpn(data)).hasMessageContaining("Hash");
     verify(subscriptionService, never()).activatePaidPlan(any(), any(), any());
   }
 

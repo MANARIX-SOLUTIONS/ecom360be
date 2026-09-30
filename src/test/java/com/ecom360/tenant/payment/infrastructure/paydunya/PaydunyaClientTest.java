@@ -16,9 +16,10 @@ class PaydunyaClientTest {
 
   @Test
   void toPaydunyaChannel_mapsWaveAndOrangeMoney() {
-    PaydunyaClient client = new PaydunyaClient(
-        new com.ecom360.tenant.payment.infrastructure.config.PaydunyaProperties(),
-        new com.fasterxml.jackson.databind.ObjectMapper());
+    PaydunyaClient client =
+        new PaydunyaClient(
+            new com.ecom360.tenant.payment.infrastructure.config.PaydunyaProperties(),
+            new com.fasterxml.jackson.databind.ObjectMapper());
     assertThat(client.toPaydunyaChannel("wave")).isEqualTo("wave-senegal");
     assertThat(client.toPaydunyaChannel("orange_money")).isEqualTo("orange-money-senegal");
     assertThat(client.toPaydunyaChannel("other")).isNull();

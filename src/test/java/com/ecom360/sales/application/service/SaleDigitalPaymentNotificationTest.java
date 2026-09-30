@@ -18,23 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SaleDigitalPaymentNotificationTest {
 
-  @Mock
-  private NotificationPublisher notificationPublisher;
+  @Mock private NotificationPublisher notificationPublisher;
 
   private SaleService saleService;
 
   @BeforeEach
   void setUp() {
-    saleService = new SaleService(
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        notificationPublisher);
+    saleService =
+        new SaleService(null, null, null, null, null, null, null, null, notificationPublisher);
   }
 
   @Test
@@ -74,8 +65,7 @@ class SaleDigitalPaymentNotificationTest {
         .notifyOwnersAndManagers(any(), any(), any(), any(), any());
   }
 
-  private static Sale digitalSale(
-      UUID businessId, UUID saleId, String method, String status) {
+  private static Sale digitalSale(UUID businessId, UUID saleId, String method, String status) {
     Sale sale = new Sale();
     sale.setId(saleId);
     sale.setBusinessId(businessId);

@@ -25,10 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PurchaseOrderPaymentAllocationServiceTest {
 
-  @Mock
-  PurchaseOrderRepository poRepo;
-  @Mock
-  PurchaseOrderPaymentRepository poPaymentRepo;
+  @Mock PurchaseOrderRepository poRepo;
+  @Mock PurchaseOrderPaymentRepository poPaymentRepo;
 
   PurchaseOrderPaymentAllocationService service;
 

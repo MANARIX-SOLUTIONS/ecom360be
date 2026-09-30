@@ -24,7 +24,7 @@ class WebhookOutboundUrlTest {
   @Test
   void rejectsUserInfo() {
     assertThatThrownBy(
-        () -> WebhookService.validateOutboundUrl("https://user:pass@example.com/hook"))
+            () -> WebhookService.validateOutboundUrl("https://user:pass@example.com/hook"))
         .isInstanceOf(BusinessRuleException.class);
   }
 

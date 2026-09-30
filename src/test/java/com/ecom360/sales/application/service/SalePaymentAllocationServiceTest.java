@@ -25,10 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SalePaymentAllocationServiceTest {
 
-  @Mock
-  SaleRepository saleRepo;
-  @Mock
-  SalePaymentRepository salePaymentRepo;
+  @Mock SaleRepository saleRepo;
+  @Mock SalePaymentRepository salePaymentRepo;
 
   SalePaymentAllocationService service;
 
