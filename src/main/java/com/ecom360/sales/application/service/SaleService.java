@@ -1,5 +1,7 @@
 package com.ecom360.sales.application.service;
 
+import com.ecom360.catalog.application.dto.PerformerSnapshot;
+import com.ecom360.catalog.application.service.ProductPerformerService;
 import com.ecom360.catalog.domain.model.Product;
 import com.ecom360.catalog.domain.repository.ProductRepository;
 import com.ecom360.client.domain.ClientCreditPolicy;
@@ -43,6 +45,7 @@ public class SaleService {
   private final SubscriptionService subscriptionService;
   private final RolePermissionService permissionService;
   private final NotificationPublisher notificationPublisher;
+  private final ProductPerformerService productPerformerService;
 
   public SaleService(
       SaleRepository saleRepo,
@@ -54,7 +57,8 @@ public class SaleService {
       StockService stockService,
       SubscriptionService subscriptionService,
       RolePermissionService permissionService,
-      NotificationPublisher notificationPublisher) {
+      NotificationPublisher notificationPublisher,
+      ProductPerformerService productPerformerService) {
     this.saleRepo = saleRepo;
     this.lineRepo = lineRepo;
     this.salePaymentRepo = salePaymentRepo;
@@ -65,6 +69,7 @@ public class SaleService {
     this.subscriptionService = subscriptionService;
     this.permissionService = permissionService;
     this.notificationPublisher = notificationPublisher;
+    this.productPerformerService = productPerformerService;
   }
 
   @Transactional
@@ -78,19 +83,7 @@ public class SaleService {
         .orElseThrow(() -> new ResourceNotFoundException("Store", req.storeId()));
     UUID clientId = requireClientForPosSale(req.clientId(), p.businessId(), req.paymentMethod());
 
-    List<LineSpec> specs = new ArrayList<>();
-    for (SaleLineRequest lr : req.lines()) {
-      Product prod =
-          productRepo
-              .findByBusinessIdAndId(p.businessId(), lr.productId())
-              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
-      Integer salePv = prod.getSalePrice();
-      if (salePv == null || salePv <= 0) {
-        throw new BusinessRuleException(
-            "Prix de vente manquant ou invalide pour le produit « " + prod.getName() + " ».");
-      }
-      specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), salePv));
-    }
+    List<LineSpec> specs = toPosLineSpecs(p.businessId(), req.storeId(), req.lines());
     return persistSaleFromLineSpecs(
         p.businessId(),
         req.storeId(),
@@ -138,7 +131,9 @@ public class SaleService {
       }
       String lineName =
           il.lineLabel() != null && !il.lineLabel().isBlank() ? il.lineLabel() : prod.getName();
-      specs.add(new LineSpec(prod.getId(), lineName, il.quantity(), il.unitPriceMinorUnits()));
+      specs.add(
+          new LineSpec(
+              prod.getId(), lineName, il.quantity(), il.unitPriceMinorUnits(), null, null));
     }
     return persistSaleFromLineSpecs(
         businessId,
@@ -230,7 +225,13 @@ public class SaleService {
     for (LineSpec line : lineSpecs) {
       SaleLine saleLine =
           SaleLine.create(
-              sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
+              sale.getId(),
+              line.productId(),
+              line.lineName(),
+              line.quantity(),
+              line.unitPrice(),
+              line.performerBusinessUserId(),
+              line.performerName());
       lineRepo.save(saleLine);
       subtotal += saleLine.getLineTotal();
       stockService.updateStockForSale(
@@ -298,7 +299,41 @@ public class SaleService {
             plan -> ClientCreditPolicy.requireFeatureEnabled(plan.getFeatureClientCredits()));
   }
 
-  private record LineSpec(UUID productId, String lineName, int quantity, int unitPrice) {}
+  private record LineSpec(
+      UUID productId,
+      String lineName,
+      int quantity,
+      int unitPrice,
+      UUID performerBusinessUserId,
+      String performerName) {}
+
+  private List<LineSpec> toPosLineSpecs(
+      UUID businessId, UUID storeId, List<SaleLineRequest> lines) {
+    List<LineSpec> specs = new ArrayList<>();
+    for (SaleLineRequest lr : lines) {
+      Product prod =
+          productRepo
+              .findByBusinessIdAndId(businessId, lr.productId())
+              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
+      Integer salePv = prod.getSalePrice();
+      if (salePv == null || salePv <= 0) {
+        throw new BusinessRuleException(
+            "Prix de vente manquant ou invalide pour le produit « " + prod.getName() + " ».");
+      }
+      PerformerSnapshot performer =
+          productPerformerService.resolveForPosSale(
+              businessId, storeId, prod, lr.performerBusinessUserId());
+      specs.add(
+          new LineSpec(
+              prod.getId(),
+              prod.getName(),
+              lr.quantity(),
+              salePv,
+              performer == null ? null : performer.businessUserId(),
+              performer == null ? null : performer.name()));
+    }
+    return specs;
+  }
 
   public SaleResponse getById(UUID id, UserPrincipal p) {
     requireBiz(p);
@@ -386,25 +421,19 @@ public class SaleService {
 
     lineRepo.deleteAll(oldLines);
 
-    List<LineSpec> specs = new ArrayList<>();
-    for (SaleLineRequest lr : req.lines()) {
-      Product prod =
-          productRepo
-              .findByBusinessIdAndId(p.businessId(), lr.productId())
-              .orElseThrow(() -> new ResourceNotFoundException("Product", lr.productId()));
-      Integer salePv = prod.getSalePrice();
-      if (salePv == null || salePv <= 0) {
-        throw new BusinessRuleException(
-            "Prix de vente manquant ou invalide pour le produit « " + prod.getName() + " ».");
-      }
-      specs.add(new LineSpec(prod.getId(), prod.getName(), lr.quantity(), salePv));
-    }
+    List<LineSpec> specs = toPosLineSpecs(p.businessId(), req.storeId(), req.lines());
 
     int subtotal = 0;
     for (LineSpec line : specs) {
       SaleLine saleLine =
           SaleLine.create(
-              sale.getId(), line.productId(), line.lineName(), line.quantity(), line.unitPrice());
+              sale.getId(),
+              line.productId(),
+              line.lineName(),
+              line.quantity(),
+              line.unitPrice(),
+              line.performerBusinessUserId(),
+              line.performerName());
       lineRepo.save(saleLine);
       subtotal += saleLine.getLineTotal();
       stockService.updateStockForSale(
@@ -616,7 +645,9 @@ public class SaleService {
                         l.getProductName(),
                         l.getQuantity(),
                         l.getUnitPrice(),
-                        l.getLineTotal()))
+                        l.getLineTotal(),
+                        l.getPerformerBusinessUserId(),
+                        l.getPerformerName()))
             .toList();
     var store = storeRepo.findById(s.getStoreId()).orElse(null);
     String storeName = store != null ? store.getName() : "Boutique";

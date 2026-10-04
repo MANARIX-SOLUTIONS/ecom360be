@@ -15,4 +15,5 @@ public record StockLevelResponse(
     Instant updatedAt,
     Integer salePrice,
     UUID categoryId,
-    String imageUrl) {}
+    String imageUrl,
+    String unit) {}

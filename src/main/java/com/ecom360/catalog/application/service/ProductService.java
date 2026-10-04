@@ -32,6 +32,7 @@ public class ProductService {
   private final StoreRepository storeRepository;
   private final ProductImageStorageService productImageStorageService;
   private final SharedCatalogStockService sharedCatalogStockService;
+  private final ProductPerformerService productPerformerService;
 
   public ProductService(
       ProductRepository productRepo,
@@ -41,7 +42,8 @@ public class ProductService {
       AuditLogService auditLogService,
       StoreRepository storeRepository,
       ProductImageStorageService productImageStorageService,
-      SharedCatalogStockService sharedCatalogStockService) {
+      SharedCatalogStockService sharedCatalogStockService,
+      ProductPerformerService productPerformerService) {
     this.productRepo = productRepo;
     this.categoryRepo = categoryRepo;
     this.subscriptionService = subscriptionService;
@@ -50,6 +52,7 @@ public class ProductService {
     this.storeRepository = storeRepository;
     this.productImageStorageService = productImageStorageService;
     this.sharedCatalogStockService = sharedCatalogStockService;
+    this.productPerformerService = productPerformerService;
   }
 
   @Transactional
@@ -75,10 +78,11 @@ public class ProductService {
         && productRepo.existsByBusinessIdAndSkuAndIsActiveTrue(p.businessId(), r.sku()))
       throw new ResourceAlreadyExistsException("Product with SKU", r.sku());
     assertAssignableCategory(r.categoryId(), null, p);
-    Store store = storeRepository
-        .findById(r.storeId())
-        .filter(s -> s.belongsTo(p.businessId()))
-        .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+    Store store =
+        storeRepository
+            .findById(r.storeId())
+            .filter(s -> s.belongsTo(p.businessId()))
+            .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
     Product prod = new Product();
     prod.setBusinessId(p.businessId());
     prod.setStoreId(store.getId());
@@ -113,19 +117,22 @@ public class ProductService {
     Page<Product> page;
     boolean shared = sharedCatalogStockService.isSharedCatalog(p.businessId());
     if (storeId != null && !shared) {
-      Store store = storeRepository
-          .findById(storeId)
-          .filter(s -> s.belongsTo(p.businessId()))
-          .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
-      page = (search != null && !search.isBlank())
-          ? productRepo.searchByBusinessIdAndStoreId(
-              p.businessId(), store.getId(), search.trim(), pg)
-          : productRepo.findByBusinessIdAndStoreIdAndIsActive(
-              p.businessId(), store.getId(), true, pg);
+      Store store =
+          storeRepository
+              .findById(storeId)
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+      page =
+          (search != null && !search.isBlank())
+              ? productRepo.searchByBusinessIdAndStoreId(
+                  p.businessId(), store.getId(), search.trim(), pg)
+              : productRepo.findByBusinessIdAndStoreIdAndIsActive(
+                  p.businessId(), store.getId(), true, pg);
     } else {
-      page = (search != null && !search.isBlank())
-          ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
-          : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
+      page =
+          (search != null && !search.isBlank())
+              ? productRepo.searchByBusinessId(p.businessId(), search.trim(), pg)
+              : productRepo.findByBusinessIdAndIsActive(p.businessId(), true, pg);
     }
     return page.map(this::map);
   }
@@ -144,14 +151,16 @@ public class ProductService {
     if (r.storeId() != null
         && !r.storeId().equals(prod.getStoreId())
         && !sharedCatalogStockService.isSharedCatalog(p.businessId())) {
-      Store store = storeRepository
-          .findById(r.storeId())
-          .filter(s -> s.belongsTo(p.businessId()))
-          .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
+      Store store =
+          storeRepository
+              .findById(r.storeId())
+              .filter(s -> s.belongsTo(p.businessId()))
+              .orElseThrow(() -> new ResourceNotFoundException("Store", r.storeId()));
       prod.setStoreId(store.getId());
     }
     String previousImageUrl = prod.getImageUrl();
     applyFields(prod, r);
+    productPerformerService.dropIfNotService(prod);
     assertUniqueActiveProduct(prod, prod.getId());
     if (previousImageUrl != null && (r.imageUrl() == null || r.imageUrl().isBlank())) {
       productImageStorageService.deleteManagedImageIfPresent(p.businessId(), previousImageUrl);
@@ -197,8 +206,9 @@ public class ProductService {
     if (categoryId == null || categoryId.equals(currentCategoryId)) {
       return;
     }
-    boolean active = categoryRepo.findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(p.businessId()).stream()
-        .anyMatch(c -> c.getId().equals(categoryId));
+    boolean active =
+        categoryRepo.findByBusinessIdAndIsActiveTrueOrderBySortOrderAsc(p.businessId()).stream()
+            .anyMatch(c -> c.getId().equals(categoryId));
     if (!active) {
       throw new ResourceNotFoundException("Category", categoryId);
     }
@@ -211,19 +221,19 @@ public class ProductService {
   }
 
   private void requireBiz(UserPrincipal p) {
-    if (!p.hasBusinessAccess())
-      throw new AccessDeniedException("Business context required");
+    if (!p.hasBusinessAccess()) throw new AccessDeniedException("Business context required");
   }
 
   private void assertUniqueActiveProduct(Product prod, UUID excludeId) {
     if (!Boolean.TRUE.equals(prod.getIsActive()) || prod.getName() == null) {
       return;
     }
-    boolean exists = excludeId == null
-        ? productRepo.existsActiveByStoreNameAndSalePrice(
-            prod.getStoreId(), prod.getName(), prod.getSalePrice())
-        : productRepo.existsOtherActiveByStoreNameAndSalePrice(
-            prod.getStoreId(), prod.getName(), prod.getSalePrice(), excludeId);
+    boolean exists =
+        excludeId == null
+            ? productRepo.existsActiveByStoreNameAndSalePrice(
+                prod.getStoreId(), prod.getName(), prod.getSalePrice())
+            : productRepo.existsOtherActiveByStoreNameAndSalePrice(
+                prod.getStoreId(), prod.getName(), prod.getSalePrice(), excludeId);
     if (exists) {
       throw new ResourceAlreadyExistsException(
           "Un produit actif avec le même nom et le même prix existe déjà dans cette boutique.");
