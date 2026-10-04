@@ -8,4 +8,6 @@ public record SaleLineResponse(
     String productName,
     Integer quantity,
     Integer unitPrice,
-    Integer lineTotal) {}
+    Integer lineTotal,
+    UUID performerBusinessUserId,
+    String performerName) {}

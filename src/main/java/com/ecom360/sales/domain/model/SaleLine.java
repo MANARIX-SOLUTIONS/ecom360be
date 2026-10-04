@@ -28,7 +28,20 @@ public class SaleLine {
   @Column(name = "line_total", nullable = false)
   private Integer lineTotal;
 
-  public static SaleLine create(UUID saleId, UUID productId, String name, int qty, int price) {
+  @Column(name = "performer_business_user_id")
+  private UUID performerBusinessUserId;
+
+  @Column(name = "performer_name")
+  private String performerName;
+
+  public static SaleLine create(
+      UUID saleId,
+      UUID productId,
+      String name,
+      int qty,
+      int price,
+      UUID performerBusinessUserId,
+      String performerName) {
     SaleLine l = new SaleLine();
     l.saleId = saleId;
     l.productId = productId;
@@ -36,6 +49,8 @@ public class SaleLine {
     l.quantity = qty;
     l.unitPrice = price;
     l.lineTotal = qty * price;
+    l.performerBusinessUserId = performerBusinessUserId;
+    l.performerName = performerName;
     return l;
   }
 
@@ -93,5 +108,21 @@ public class SaleLine {
 
   public void setLineTotal(Integer v) {
     this.lineTotal = v;
+  }
+
+  public UUID getPerformerBusinessUserId() {
+    return performerBusinessUserId;
+  }
+
+  public void setPerformerBusinessUserId(UUID v) {
+    this.performerBusinessUserId = v;
+  }
+
+  public String getPerformerName() {
+    return performerName;
+  }
+
+  public void setPerformerName(String v) {
+    this.performerName = v;
   }
 }

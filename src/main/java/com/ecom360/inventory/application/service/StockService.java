@@ -350,7 +350,8 @@ public class StockService {
         s.getUpdatedAt(),
         pr != null ? pr.getSalePrice() : null,
         pr != null ? pr.getCategoryId() : null,
-        pr != null ? pr.getImageUrl() : null);
+        pr != null ? pr.getImageUrl() : null,
+        pr != null ? pr.getUnit() : null);
   }
 
   private StockLevelResponse mapLevel(ProductStoreStock s) {

@@ -25,7 +25,8 @@ class SaleDigitalPaymentNotificationTest {
   @BeforeEach
   void setUp() {
     saleService =
-        new SaleService(null, null, null, null, null, null, null, null, notificationPublisher);
+        new SaleService(
+            null, null, null, null, null, null, null, null, null, notificationPublisher, null);
   }
 
   @Test
