@@ -102,6 +102,13 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Engineering docs
+
+| Doc | Covers |
+|-----|--------|
+| [docs/account-and-email.md](docs/account-and-email.md) | Profile `/users/me`, password reset and change, transactional email delivery |
+| [docs/ci-workflows.md](docs/ci-workflows.md) | CI, CD, release, and security workflows: what each job actually runs |
+
 ## License
 
 Proprietary - 360 PME Commerce
