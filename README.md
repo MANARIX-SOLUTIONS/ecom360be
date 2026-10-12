@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Engineering docs
+
+| Doc | Covers |
+|-----|--------|
+| [docs/api-keys-and-outbound-webhooks.md](docs/api-keys-and-outbound-webhooks.md) | Tenant API key and outbound webhook registry: what is stored, and what is not enforced |
+
 ## License
 
 Proprietary - 360 PME Commerce
