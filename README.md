@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Engineering docs
+
+| Doc | Covers |
+|-----|--------|
+| [docs/stores.md](docs/stores.md) | Store CRUD, plan `max_stores`, active-store list filtering, and delete constraints |
+
 ## License
 
 Proprietary - 360 PME Commerce
