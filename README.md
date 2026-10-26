@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Engineering docs
+
+| Doc | Covers |
+|-----|--------|
+| [docs/http-errors-and-request-pipeline.md](docs/http-errors-and-request-pipeline.md) | Error body shapes, auth and subscription filters, pagination, and JSON parsing |
+
 ## License
 
 Proprietary - 360 PME Commerce
