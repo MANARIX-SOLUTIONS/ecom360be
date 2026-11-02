@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Documentation
+
+| Guide | What it covers |
+| --- | --- |
+| [docs/plan-limits-and-usage.md](docs/plan-limits-and-usage.md) | Usage counters versus create gates, seeded plan limits, and which feature flags are enforced |
+
 ## License
 
 Proprietary - 360 PME Commerce
