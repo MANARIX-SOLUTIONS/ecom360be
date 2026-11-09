@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Documentation
+
+| Guide | What it covers |
+| --- | --- |
+| [docs/inventory-stock.md](docs/inventory-stock.md) | On-hand rows, adjustment types, sale and receipt movements, and low-stock alerts |
+
 ## License
 
 Proprietary - 360 PME Commerce
