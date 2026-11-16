@@ -102,6 +102,12 @@ All data is scoped by `business_id`. Users belong to one or more businesses via 
 - `gestionnaire` - Manager
 - `caissier` - Cashier
 
+## Documentation
+
+| Guide | What it covers |
+| --- | --- |
+| [docs/delivery-couriers.md](docs/delivery-couriers.md) | Courier CRUD, delivery records, plan flag, and performance stats |
+
 ## License
 
 Proprietary - 360 PME Commerce
